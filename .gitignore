@@ -39,3 +39,7 @@ dist/
 
 # agent worktrees and local harness state
 .claude/
+
+# Lockfiles are not committed yet. Phase 10 decides whether CI installs from them or
+# resolves fresh, and adding one without the other would be worse than neither.
+uv.lock
