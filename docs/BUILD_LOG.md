@@ -651,16 +651,17 @@ of three attempts was spent doing nothing. The two calls are now the other way r
 
 ### Verification
 
-97 tests, up from 91. Three mutations, each failing exactly its own test and nothing else:
+98 tests, up from 91. Four mutations, each failing exactly its own test and nothing else:
 
 | Mutation | Test that failed |
 |---|---|
 | `commit=True` on the status write | `assert 'COMPLETED' == 'PROCESSING'` |
 | the `conn.commit()` after a successful put removed | `assert 'PROCESSING' == 'COMPLETED'` |
 | visibility extended before the lease | `assert ['visibility', 'lease'] == ['lease', 'visibility']` |
+| the visibility timeout extended after the put rather than before it | `assert ['put', 'visibility:120'] == ['visibility:120', 'put']` |
 
 ```
-97 passed in 3.35s
+98 passed in 3.45s
 Success: no issues found in 35 source files
 All checks passed!
 ```
@@ -674,3 +675,26 @@ back on a second connection so an open transaction on the first cannot hide the 
 Formatting has never been part of the gate, only `ruff check`. CI in phase 10 should either
 not run `ruff format --check` or land a formatting pass of its own, rather than mixing an
 unrelated reformat into this change.
+
+### A third review finding, on the window the heartbeat no longer covers
+
+The review pointed out that the heartbeat context closes before `_publish_and_commit`, so
+nothing extends the visibility timeout across the two writes that follow. A `put_object` that
+botocore retires through its own retries can outlast whatever the last beat bought, and the
+message is then redelivered while this transaction still holds the row lock.
+
+The window is real. The stated consequence, a delete failing on a stale receipt handle, is
+not what happens: `DeleteMessage` with a superseded receipt handle is documented as possibly
+not deleting the message rather than as an error, and nothing is lost either way. The
+redelivered worker blocks on the row lock, waits for the commit, then finds the document
+terminal and deletes the message with its own valid receipt.
+
+What it actually costs is a delivery attempt, and three of those send a perfectly finished
+document to the dead letter queue and fire the alarm on it. That is worth closing, so the
+visibility timeout is now pushed out to a full window immediately before the report is
+written.
+
+The lease is deliberately not extended with it, which breaks the "one number for both" rule
+on purpose and for one bounded stretch: the row lock, not the lease, is what protects the
+document between the status write and the commit, and on a rollback a lease that lapses
+sooner is exactly what lets the redelivery reclaim the document instead of refusing itself.

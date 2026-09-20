@@ -13,6 +13,7 @@ import signal
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -284,7 +285,9 @@ class Worker:
                 return Ack.RETURN
 
         report = final.get("report") or {}
-        return self._record(conn, event, report, final, claimed)
+        # extend_visibility is handed on because the heartbeat has stopped by this point and
+        # the two writes below still need a window to run in. See _publish_and_commit.
+        return self._record(conn, event, report, final, claimed, extend_visibility)
 
     def _record(
         self,
@@ -293,6 +296,7 @@ class Worker:
         report: dict[str, Any],
         final: dict[str, Any],
         claimed: Claim,
+        extend_visibility: Callable[[int], None],
     ) -> Ack:
         doc_type = str(report.get("document_type") or "") or None
 
@@ -320,7 +324,9 @@ class Worker:
             ):
                 log.warning("lease lost before the failure could be recorded, discarding it")
                 return Ack.RETURN
-            if not self._publish_and_commit(conn, event.document_id, report):
+            if not self._publish_and_commit(
+                conn, event.document_id, report, extend_visibility
+            ):
                 return Ack.RETURN
             log.info("recorded FAILED")
             return Ack.DELETE
@@ -350,7 +356,7 @@ class Worker:
             log.warning("lease lost before the result could be written, discarding it")
             return Ack.RETURN
 
-        if not self._publish_and_commit(conn, event.document_id, report):
+        if not self._publish_and_commit(conn, event.document_id, report, extend_visibility):
             return Ack.RETURN
         log.info("recorded COMPLETED as %s", outcome)
         return Ack.DELETE
@@ -369,12 +375,26 @@ class Worker:
             return "application/octet-stream"
 
     def _publish_and_commit(
-        self, conn: psycopg.Connection, document_id: uuid.UUID, report: dict[str, Any]
+        self,
+        conn: psycopg.Connection,
+        document_id: uuid.UUID,
+        report: dict[str, Any],
+        extend_visibility: Callable[[int], None],
     ) -> bool:
         """Store the report, then make the terminal status visible. Both, or neither.
 
         The status write above is deliberately still uncommitted, so it holds the row lock
         while the report is written. Nobody else can claim the document in that window.
+
+        The visibility timeout is pushed out first, because the heartbeat stopped when the
+        graph finished and nothing is extending it any more. What is left of the window is
+        whatever the last beat bought, and a put_object that botocore retries can outlast it.
+        Nothing is lost when that happens, since a redelivered worker blocks on the row lock
+        and then finds the document terminal, but it spends a delivery attempt to learn that
+        and can push a finished document into the dead letter queue. The lease is
+        deliberately not extended alongside it: the row lock is what protects the document
+        until the commit, and on a rollback a lease that lapses sooner is exactly what lets
+        the redelivery reclaim the document.
 
         If the put fails the transaction is rolled back, the document stays PROCESSING with
         its lease running, and the message is returned for SQS to redeliver, which retries
@@ -383,6 +403,7 @@ class Worker:
         deleted the message without ever reaching this line, so the report route stayed 404
         for the life of the document.
         """
+        extend_visibility(CFG.lease_seconds)
         try:
             self._publish_report(document_id, report)
         except Exception:

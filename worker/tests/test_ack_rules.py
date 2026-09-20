@@ -98,6 +98,11 @@ def make_worker(monkeypatch, sqs: FakeSQS, s3: FakeS3):
     return worker
 
 
+def sqs_visibility(sqs: FakeSQS):
+    """The extender the poll loop builds from the receipt handle, for a direct _record call."""
+    return lambda seconds: sqs.change_message_visibility(VisibilityTimeout=seconds)
+
+
 def message(document_id: uuid.UUID, receipt: str = "r1", receive_count: int = 1) -> dict:
     return {
         "ReceiptHandle": receipt,
@@ -268,6 +273,7 @@ def test_a_worker_that_lost_its_lease_writes_nothing_at_all(conn, monkeypatch):
         {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
         {"outcome": "COMPLETE"},
         type("C", (), {"attempt_count": 1})(),
+        sqs_visibility(sqs),
     )
 
     assert decision is consumer_main.Ack.RETURN
@@ -290,6 +296,7 @@ def test_the_holder_of_the_lease_publishes_exactly_one_report(conn, monkeypatch)
         {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
         {"outcome": "COMPLETE"},
         type("C", (), {"attempt_count": 1})(),
+        sqs_visibility(sqs),
     )
 
     assert decision is consumer_main.Ack.DELETE
@@ -322,6 +329,7 @@ def test_a_report_that_cannot_be_stored_leaves_the_document_retryable(conn, monk
         {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
         {"outcome": "COMPLETE"},
         claimed,
+        sqs_visibility(sqs),
     )
 
     assert decision is consumer_main.Ack.RETURN
@@ -356,6 +364,7 @@ def test_a_stored_report_commits_the_completion(conn, monkeypatch):
         {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
         {"outcome": "COMPLETE"},
         claimed,
+        sqs_visibility(sqs),
     )
 
     assert decision is consumer_main.Ack.DELETE
@@ -387,6 +396,7 @@ def test_a_failed_document_whose_report_cannot_be_stored_is_also_retryable(conn,
         {"outcome": "FAILED", "error": {"message": "the file could not be read"}},
         {"outcome": "FAILED"},
         claimed,
+        sqs_visibility(sqs),
     )
 
     assert decision is consumer_main.Ack.RETURN
@@ -394,3 +404,39 @@ def test_a_failed_document_whose_report_cannot_be_stored_is_also_retryable(conn,
     assert s3.puts == []
     with psycopg.connect(DSN) as other:
         assert status_of(other, document_id) == "PROCESSING"
+
+
+def test_the_visibility_timeout_is_extended_before_the_report_is_written(conn, monkeypatch):
+    """The heartbeat stops when the graph finishes, so the writes after it run unprotected.
+
+    Whatever the last beat bought is all the window there is, and a put_object that botocore
+    retries can outlast it. The message is then redelivered while this transaction still
+    holds the row lock. That costs a delivery attempt rather than any data, because the
+    redelivered worker waits on the lock and then finds the document terminal, but three of
+    those put a perfectly finished document into the dead letter queue.
+    """
+    from consumer.claim import claim as take_claim
+    from consumer.config import CONSUMER_CONFIG
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    s3 = FakeS3()
+    worker = make_worker(monkeypatch, sqs, s3)
+    claimed = take_claim(conn, document_id, 120)
+
+    # One list, so the assertion is about the order of the two calls and not just that both
+    # happened. Two separate counters would pass with the extension after the put.
+    order: list[str] = []
+    real_put = s3.put_object
+    monkeypatch.setattr(s3, "put_object", lambda **kw: (order.append("put"), real_put(**kw))[1])
+
+    worker._record(
+        conn,
+        type("E", (), {"document_id": document_id})(),
+        {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
+        {"outcome": "COMPLETE"},
+        claimed,
+        lambda seconds: order.append(f"visibility:{seconds}"),
+    )
+
+    assert order == [f"visibility:{CONSUMER_CONFIG.lease_seconds}", "put"]
