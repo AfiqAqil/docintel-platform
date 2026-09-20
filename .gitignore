@@ -43,3 +43,4 @@ dist/
 # sample generator environment
 samples/.venv/
 backend/.venv/
+worker/.venv/
