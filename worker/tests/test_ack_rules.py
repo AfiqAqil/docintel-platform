@@ -237,3 +237,55 @@ def test_a_fetch_failure_on_the_last_attempt_records_failure_and_deletes(conn, m
 
     assert sqs.deleted == ["r1"]
     assert status_of(conn, document_id) == "FAILED"
+
+
+def test_a_worker_that_lost_its_lease_writes_nothing_at_all(conn, monkeypatch):
+    """Ownership is settled by the database write, so nothing may be published before it.
+
+    Publishing the report first meant a worker that had already lost the lease still
+    overwrote the winner's report, and only then discovered its own database write was
+    refused. The row would describe one run while the stored report came from another, with
+    no error raised anywhere. A wrong answer nobody can detect is worse than a missing one.
+    """
+    from consumer import main as consumer_main
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    s3 = FakeS3()
+    worker = make_worker(monkeypatch, sqs, s3)
+
+    # The lease is lost between the last heartbeat and the final write, which is exactly
+    # the window the conditional write exists to cover.
+    monkeypatch.setattr(consumer_main, "mark_completed", lambda *a, **k: False)
+    monkeypatch.setattr(consumer_main, "mark_failed", lambda *a, **k: False)
+
+    decision = worker._record(
+        conn,
+        type("E", (), {"document_id": document_id})(),
+        {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
+        {"outcome": "COMPLETE"},
+    )
+
+    assert decision is consumer_main.Ack.RETURN
+    assert s3.puts == [], "a worker without the lease must not publish a report"
+
+
+def test_the_holder_of_the_lease_publishes_exactly_one_report(conn, monkeypatch):
+    """The other half of the rule: once the write succeeds, the report is published."""
+    from consumer import main as consumer_main
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    s3 = FakeS3()
+    worker = make_worker(monkeypatch, sqs, s3)
+    monkeypatch.setattr(consumer_main, "mark_completed", lambda *a, **k: True)
+
+    decision = worker._record(
+        conn,
+        type("E", (), {"document_id": document_id})(),
+        {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
+        {"outcome": "COMPLETE"},
+    )
+
+    assert decision is consumer_main.Ack.DELETE
+    assert s3.puts == [f"reports/{document_id}.json"]

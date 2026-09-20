@@ -142,3 +142,50 @@ def test_healthz_survives_dead_database(
     response = client.get("/healthz")
 
     assert response.status_code == 200
+
+
+def test_a_negative_size_is_rejected(client):
+    """A negative size passed both the schema and the endpoint's upper bound check, so a row
+    could be created with impossible metadata while S3 went on to accept a real object."""
+    response = client.post(
+        "/api/documents",
+        json={"filename": "a.pdf", "content_type": "application/pdf", "size_bytes": -1},
+    )
+    assert response.status_code == 422
+
+
+def test_an_empty_file_is_rejected(client):
+    """An empty file is not a document. Accepting one only creates a row that can do nothing
+    but fail later, so it is refused at intake."""
+    response = client.post(
+        "/api/documents",
+        json={"filename": "a.pdf", "content_type": "application/pdf", "size_bytes": 0},
+    )
+    assert response.status_code == 422
+
+
+def test_the_database_refuses_a_non_positive_size_too(db_session):
+    """Validation at the edge is not a guarantee about the table.
+
+    Anything writing to it that is not the API, a fix applied by hand, a future service, is
+    not covered by a Pydantic model, so the constraint lives in both places.
+    """
+    import uuid as _uuid
+
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import Document, Status
+
+    db_session.add(
+        Document(
+            id=_uuid.uuid4(),
+            filename="a.pdf",
+            content_type="application/pdf",
+            size_bytes=-1,
+            status=Status.UPLOADING.value,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()

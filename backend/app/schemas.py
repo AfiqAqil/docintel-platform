@@ -11,13 +11,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentCreateRequest(BaseModel):
-    filename: str
+    filename: str = Field(min_length=1, max_length=512)
     content_type: str
-    size_bytes: int
+    # Bounded below as well as above. Without a lower bound a negative size passes both this
+    # schema and the endpoint's upper bound check, creating a row whose metadata is
+    # impossible while S3 goes on to accept a perfectly real object. Zero is excluded too: an
+    # empty file is not a document, and accepting one only creates a row that can do nothing
+    # but fail later.
+    size_bytes: int = Field(gt=0)
 
 
 class DocumentCreateResponse(BaseModel):
