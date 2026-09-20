@@ -1,0 +1,78 @@
+{
+  "document_id": "customer_correspondence",
+  "generated_at": "2026-09-20T13:34:24Z",
+  "document_type": "customer_correspondence",
+  "classification": {
+    "confidence": 0.95,
+    "notes": "The document is a letter addressed to an insurance company inquiring about the status of a claim. It contains a request for an update, which aligns with customer correspondence regarding insurance matters."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The document contains customer correspondence regarding a request for an update on a claim related to water damage in the kitchen. The correspondence is marked as complete and dated in July 2026, but it does not provide a specific title or monetary amounts associated with the claim. There are no missing pieces of information or additional observations noted in the document.",
+  "extracted": {
+    "document_title": {
+      "value": null,
+      "snippet": null,
+      "verified": null
+    },
+    "reference_number": {
+      "value": "CLM-2026-00931",
+      "snippet": "my claim, reference CLM-2026-00931",
+      "verified": true
+    },
+    "related_party_name": {
+      "value": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "date": {
+      "value": "2026-07-02",
+      "snippet": "2026-07-02",
+      "verified": true
+    },
+    "monetary_amount": {
+      "value": null,
+      "snippet": null,
+      "verified": null
+    },
+    "summary": {
+      "value": "This document is a request for an update on a claim regarding water damage to the kitchen.",
+      "snippet": "I am writing regarding my claim, reference CLM-2026-00931, filed on 2026-06-10 under policy POL-004821.",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 7,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1364,
+      "detail": null
+    },
+    {
+      "node": "extract_generic",
+      "status": "ok",
+      "duration_ms": 2255,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

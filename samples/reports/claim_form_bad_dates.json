@@ -1,0 +1,119 @@
+{
+  "document_id": "claim_form_bad_dates",
+  "generated_at": "2026-09-20T13:33:58Z",
+  "document_type": "claim_form",
+  "classification": {
+    "confidence": 0.95,
+    "notes": "The document is an insurance claim form detailing a specific incident, including claimant information, incident description, and claimed amount."
+  },
+  "outcome": "INCOMPLETE",
+  "summary": "The processed document is a claim form that was deemed incomplete. It pertains to a claim related to a water damage incident due to a burst kitchen pipe, which impacted the flooring and cabinets at a specified location. The incident occurred shortly before the claim was filed, with the claimant seeking compensation for damages amounting to a specified amount. No additional missing information was identified, although a prior attempt at data extraction was acknowledged due to previous validation errors.",
+  "extracted": {
+    "policy_number": {
+      "value": "POL-004821",
+      "snippet": "Policy Number: POL-004821",
+      "verified": true
+    },
+    "claim_reference": {
+      "value": "CLM-2026-00931",
+      "snippet": "Claim Reference: CLM-2026-00931",
+      "verified": true
+    },
+    "claimant_name": {
+      "value": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Claimant Name: \u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "claimant_address": {
+      "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022",
+      "snippet": "Claimant Address: \u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022",
+      "verified": true
+    },
+    "claimant_phone": {
+      "value": "+\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u20220123",
+      "snippet": "Claimant Phone: +\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u20220123",
+      "verified": true
+    },
+    "claimant_email": {
+      "value": "\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022",
+      "snippet": "Claimant Email: \u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022",
+      "verified": true
+    },
+    "date_of_incident": {
+      "value": "2026-06-15",
+      "snippet": "Date of Incident: 2026-06-15",
+      "verified": true
+    },
+    "date_filed": {
+      "value": "2026-06-10",
+      "snippet": "Date Filed: 2026-06-10",
+      "verified": true
+    },
+    "incident_description": {
+      "value": "Kitchen pipe burst causing water damage to flooring and cabinets.",
+      "snippet": "Incident Description: Kitchen pipe burst causing water damage to flooring and cabinets.",
+      "verified": true
+    },
+    "incident_location": {
+      "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Incident Location: \u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "claimed_amount": {
+      "value": "3250.00",
+      "snippet": "Claimed Amount: 3250.00",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [
+    "date_of_incident is after date_filed"
+  ],
+  "observations": [
+    "Extraction was retried once with the previous validation errors appended."
+  ],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1620,
+      "detail": null
+    },
+    {
+      "node": "extract_claim",
+      "status": "ok",
+      "duration_ms": 3789,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "extract_claim",
+      "status": "ok",
+      "duration_ms": 3135,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

@@ -152,11 +152,17 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
 
     # Collect the real values first, because they have to be scrubbed from the snippets and
     # the trace as well, not only from the fields they came from.
-    secrets = [
-        (field["value"], name in tail_allowed)
-        for name, field in extracted.items()
-        if name in sensitive and isinstance(field, dict) and field.get("value")
-    ]
+    # Built with an explicit loop rather than a comprehension so the narrowing from
+    # `str | None` to `str` is visible to a reader and to a type checker, instead of hiding
+    # in a truthiness filter that neither can follow.
+    secrets: list[tuple[str, bool]] = []
+    for name, field in extracted.items():
+        if name not in sensitive or not isinstance(field, dict):
+            continue
+        value = field.get("value")
+        if value:
+            secrets.append((value, name in tail_allowed))
+
     # Longest first, so a value that contains a shorter one is masked whole rather than
     # being partly rewritten by the shorter match.
     secrets.sort(key=lambda pair: len(pair[0]), reverse=True)
@@ -176,6 +182,21 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
 
         value = field.get("value")
         snippet = field.get("snippet")
+
+        if name in sensitive and not value:
+            # A sensitive field with no value still has a snippet, and that snippet quotes
+            # the region of the document the value was read from, so it usually contains the
+            # value verbatim. This is not a corner case: it is exactly what snippet
+            # verification produces when it rejects a field, clearing the value and leaving
+            # the evidence behind.
+            #
+            # The snippet is dropped rather than redacted, because with no value there is
+            # nothing to search for. Redacting would silently do nothing while looking like
+            # a control, which is the same mistake the classifier rationale made.
+            masked[name] = FieldValue(
+                value=None, snippet=None, verified=field.get("verified")
+            )
+            continue
 
         if name in sensitive and value:
             masked[name] = FieldValue(
@@ -198,15 +219,17 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
             )
 
     trace: list[StepRecord] = state.get("trace") or []
-    masked_trace = [
-        StepRecord(
-            node=step["node"],
-            status=step["status"],
-            duration_ms=step["duration_ms"],
-            detail=_redact_occurrences(step["detail"], secrets) if step.get("detail") else None,
+    masked_trace: list[StepRecord] = []
+    for step in trace:
+        detail = step.get("detail")
+        masked_trace.append(
+            StepRecord(
+                node=step["node"],
+                status=step["status"],
+                duration_ms=step["duration_ms"],
+                detail=_redact_occurrences(detail, secrets) if detail else None,
+            )
         )
-        for step in trace
-    ]
 
     errors = [_redact_occurrences(e, secrets) for e in (state.get("validation_errors") or [])]
 

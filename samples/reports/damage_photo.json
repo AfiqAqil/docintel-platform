@@ -1,0 +1,44 @@
+{
+  "document_id": "damage_photo",
+  "generated_at": "2026-09-20T13:34:26Z",
+  "document_type": "unknown",
+  "classification": {
+    "confidence": 0.0,
+    "notes": "The document appears to be an image of a simplified illustration rather than a text-based document related to insurance. Therefore, it does not fit any of the specified classifications."
+  },
+  "outcome": "UNSUPPORTED",
+  "summary": "The document reviewed is an image-only file, which prevented any automated verification or analysis. It was not possible to ascertain the document type, leading to its routing for manual review. There were no additional observations or missing information noted during the process.",
+  "extracted": {},
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [
+    "Document is image only; snippet verification could not run against it.",
+    "The document type could not be determined. Routed for manual review."
+  ],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 9,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1021,
+      "detail": null
+    },
+    {
+      "node": "mark_unsupported",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

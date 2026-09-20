@@ -24,7 +24,7 @@ from __future__ import annotations
 import functools
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -151,7 +151,9 @@ def classify(state: State) -> dict[str, Any]:
         state.get("text") or None,
         state.get("page_images") if state.get("image_only") else None,
     )
-    result: Classification = model.invoke(messages)
+    # with_structured_output is typed as returning a dict or a model, because a caller can
+    # ask for either. We always ask for the model, so this narrows what the type cannot.
+    result = cast(Classification, model.invoke(messages))
 
     return {
         "doc_type": result.doc_type,
@@ -182,9 +184,9 @@ def _extract(state: State, doc_type: DocType) -> dict[str, Any]:
         state.get("page_images") if state.get("image_only") else None,
         previous_errors,
     )
-    result = model.invoke(messages)
+    result = cast(BaseModel, model.invoke(messages))
 
-    extracted: dict[str, FieldValue] = {}
+    extracted: dict[str, Any] = {}
     for field_name in type(result).model_fields:
         field = getattr(result, field_name, None)
         if field is None:

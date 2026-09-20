@@ -37,8 +37,8 @@ def verify_snippet(snippet: str | None, source_text: str) -> bool | None:
 
 
 def verify_all(
-    extracted: dict[str, FieldValue], source_text: str, image_only: bool
-) -> tuple[dict[str, FieldValue], list[str]]:
+    extracted: dict[str, Any], source_text: str, image_only: bool
+) -> tuple[dict[str, Any], list[str]]:
     """Verify every field's snippet against the source text.
 
     Returns the extracted dict with `verified` populated on each field, and rejected fields'

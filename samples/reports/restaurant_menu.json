@@ -1,0 +1,43 @@
+{
+  "document_id": "restaurant_menu",
+  "generated_at": "2026-09-20T13:34:50Z",
+  "document_type": "unknown",
+  "classification": {
+    "confidence": 0.9,
+    "notes": "The document lists a seasonal menu for a kitchen, which includes food items and prices. It does not fit any insurance-related categories such as claims, policies, invoices, or customer correspondence."
+  },
+  "outcome": "UNSUPPORTED",
+  "summary": "The document could not be classified into a specific type and has been marked as unsupported, leading to a decision to send it for manual review. No information was extracted from the document, and there were no additional details identified as missing.",
+  "extracted": {},
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [
+    "The document type could not be determined. Routed for manual review."
+  ],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 1,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1339,
+      "detail": null
+    },
+    {
+      "node": "mark_unsupported",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

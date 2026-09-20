@@ -259,8 +259,14 @@ def test_value_with_no_snippet_is_rejected() -> None:
 def test_decimal_arithmetic_is_exact_not_float() -> None:
     # Protects against float rounding: 0.1 + 0.2 != 0.3 in binary floating point, but is exact
     # in Decimal. If _parse_amount ever switched to float, this would start failing.
-    assert _parse_amount("0.1") + _parse_amount("0.2") == Decimal("0.3")
-    assert isinstance(_parse_amount("0.1"), Decimal)
+    one_tenth = _parse_amount("0.1")
+    two_tenths = _parse_amount("0.2")
+    # Narrowed rather than asserted inline: _parse_amount returns None for anything it
+    # cannot parse, and a test that silently skipped its own assertion on a None would pass
+    # while proving nothing.
+    assert one_tenth is not None and two_tenths is not None
+    assert one_tenth + two_tenths == Decimal("0.3")
+    assert isinstance(one_tenth, Decimal)
 
     extracted = {
         "invoice_number": fv("INV-1001", None),

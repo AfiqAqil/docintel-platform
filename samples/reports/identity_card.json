@@ -1,0 +1,96 @@
+{
+  "document_id": "identity_card",
+  "generated_at": "2026-09-20T13:34:30Z",
+  "document_type": "identity_document",
+  "classification": {
+    "confidence": 1.0,
+    "notes": "The document is a national identity card, which includes personal information such as name, date of birth, identity number, nationality, and issuing authority, classifying it as an identity document."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The processed document is a complete record of a National Identity Card from an individual of Avantian nationality. It includes essential details such as the person's full name, date of birth, identity number, address, issue date, expiry date, and the authority responsible for issuing the card. However, the verification process could not be executed since the document was provided as an image only, resulting in unverified extraction. There were no missing pieces of information noted in the review.",
+  "extracted": {
+    "document_type": {
+      "value": "National Identity Card",
+      "snippet": "AVANTIA NATIONAL IDENTITY CARD",
+      "verified": null
+    },
+    "full_name": {
+      "value": "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Full Name: \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": null
+    },
+    "date_of_birth": {
+      "value": "\u2022\u2022\u2022\u2022-\u2022\u2022-\u2022\u2022",
+      "snippet": "Date of Birth: \u2022\u2022\u2022\u2022-\u2022\u2022-\u2022\u2022",
+      "verified": null
+    },
+    "identity_number": {
+      "value": "\u2022\u2022\u2022\u2022\u20224321",
+      "snippet": "Identity Number: \u2022\u2022\u2022\u2022\u20224321",
+      "verified": null
+    },
+    "nationality": {
+      "value": "Avantian",
+      "snippet": "Nationality: Avantian",
+      "verified": null
+    },
+    "address": {
+      "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
+      "snippet": "Address: \u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
+      "verified": null
+    },
+    "issue_date": {
+      "value": "2022-01-10",
+      "snippet": "Issue Date: 2022-01-10",
+      "verified": null
+    },
+    "expiry_date": {
+      "value": "2032-01-10",
+      "snippet": "Expiry Date: 2032-01-10",
+      "verified": null
+    },
+    "issuing_authority": {
+      "value": "Avantia Department of Identity Services",
+      "snippet": "Issuing Authority: Avantia Department of Identity Services",
+      "verified": null
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [
+    "Document is image only; snippet verification could not run against it.",
+    "Input was image only, so evidence snippets could not be verified against source text. Extraction is unverified."
+  ],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 15,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1311,
+      "detail": null
+    },
+    {
+      "node": "extract_identity",
+      "status": "ok",
+      "duration_ms": 2200,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}
