@@ -112,8 +112,8 @@ sequenceDiagram
     S3->>Q: ObjectCreated event (the real trigger)
     W->>Q: ReceiveMessage (long poll)
     W->>DB: conditional claim, status=PROCESSING, lease set
-    W->>S3: GetObject (original)
-    W->>BR: classify, extract, summarise
+    W->>S3: GetObject (consumer, before the graph starts)
+    W->>BR: classify, extract, summarise (the graph)
     W->>S3: PutObject reports/{document_id}.json
     W->>DB: status=COMPLETED/FAILED + outcome + summary
     W->>Q: DeleteMessage
@@ -276,7 +276,8 @@ One `TypedDict` shared by every node. Nodes return only the keys they change.
 
 | Key | Type | Written by |
 |---|---|---|
-| `document_id`, `s3_key`, `content_type`, `file_size` | identifiers | the consumer, from the SQS message |
+| `document_id`, `s3_key`, `content_type`, `file_size`, `filename` | identifiers | the consumer, from the SQS message |
+| `raw_bytes` | the original file | the consumer, fetched from S3 before the graph starts |
 | `text`, `page_images` | extracted content | `load_document` |
 | `doc_type`, `confidence`, `classification_notes` | classification | `classify` |
 | `extracted` | `dict` validated against a per-type Pydantic model | extraction nodes |
@@ -286,11 +287,27 @@ One `TypedDict` shared by every node. Nodes return only the keys they change.
 | `report` | `dict` | `generate_report` |
 | `error` | `{node, kind, message}` or `None` | any node |
 | `trace` | `Annotated[list[StepRecord], operator.add]` | every node, appended |
+| `masked_trace` | `list[StepRecord]` | `mask_pii`, written once. The copy the report carries |
+| `observations` | `Annotated[list[str], operator.add]` | any node, appended. Notes for the report: a page cap hit, a retry, verification skipped |
 
 `trace` is the only accumulating key, so it uses a reducer. Everything else is last-write-wins,
 which is what we want when a retry overwrites an earlier extraction.
 
 `StepRecord` is `{node: str, status: "ok" | "error", duration_ms: int, detail: str | None}`.
+
+**Masking writes `masked_trace`, not `trace`.** `trace` accumulates through a reducer, so a
+node that returns it appends to it and can never replace it. `mask_pii` therefore writes the
+scrubbed copy to a separate `masked_trace` key, and `generate_report` persists that one.
+Raw `trace` exists only for the duration of the run: it is never written to a log, never
+persisted, and there is no checkpointer to store it, so the guarantee that nothing sensitive
+leaves the worker is unchanged. The mechanism differs from "the node masks the trace" only
+because an append only key cannot be masked in place.
+
+**The graph makes no AWS call at all, not only no database call.** The consumer fetches the
+object from S3 and puts the bytes into the initial state as `raw_bytes`; `load_document` is
+pure parsing. Fetching is infrastructure work, which belongs to the `consumer/` layer in the
+table above, and moving it there is what lets the entire graph run in tests and in a local
+script against a file on disk, with no credentials and nothing mocked.
 
 ### The report
 
