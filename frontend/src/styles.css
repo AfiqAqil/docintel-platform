@@ -244,6 +244,12 @@ h1, h2, h3 {
   color: var(--error);
 }
 
+/* A field the document simply does not contain. Neutral grey, because it is not a problem
+   with the extraction, it is information about the document. */
+.verified-absent {
+  color: #6b7280;
+}
+
 .verified-null {
   color: var(--warn);
 }

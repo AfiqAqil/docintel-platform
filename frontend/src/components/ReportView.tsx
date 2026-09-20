@@ -7,18 +7,28 @@ type Props = {
   doc: DocumentOut;
 };
 
-// verified: true = snippet found in source, false = snippet not found (field
-// rejected), null = image only input, nothing to check against. All three
-// are distinct outcomes, not just "verified or not".
-function verifiedLabel(verified: boolean | null): string {
+// Four outcomes, not two, and the difference matters to whoever reads the report.
+//
+//   true   the evidence snippet was found in the source text
+//   false  it was not, so the field was rejected as a fabricated citation
+//   null   nothing was checked, for one of two quite different reasons
+//
+// The two null cases have to be told apart. A field with no value was never extracted, so
+// there was nothing to verify. A field with a value and no verification means the input was
+// image only and there was no text to match a snippet against. Labelling both as "image
+// only" told the reader something false about a text document, which is worse than saying
+// nothing: it invents a reason.
+function verifiedLabel(verified: boolean | null, hasValue: boolean): string {
   if (verified === true) return "Verified";
   if (verified === false) return "Rejected - evidence not found in source";
+  if (!hasValue) return "Not present in the document";
   return "Unverified - image only input, no text to check";
 }
 
-function verifiedClass(verified: boolean | null): string {
+function verifiedClass(verified: boolean | null, hasValue: boolean): string {
   if (verified === true) return "verified verified-true";
   if (verified === false) return "verified verified-false";
+  if (!hasValue) return "verified verified-absent";
   return "verified verified-null";
 }
 
@@ -156,7 +166,9 @@ export function ReportView({ doc }: Props): JSX.Element {
                 <tr key={name}>
                   <td>{name}</td>
                   <td>{field.value}</td>
-                  <td className={verifiedClass(field.verified)}>{verifiedLabel(field.verified)}</td>
+                  <td className={verifiedClass(field.verified, field.value !== null)}>
+                    {verifiedLabel(field.verified, field.value !== null)}
+                  </td>
                   <td className="snippet">{field.snippet}</td>
                 </tr>
               ))}

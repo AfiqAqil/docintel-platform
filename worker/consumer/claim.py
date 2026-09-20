@@ -111,6 +111,19 @@ RETURNING id
 """
 
 
+# Progress only. Deliberately not the heartbeat statement: writing a step should never
+# extend a lease as a side effect, or a worker stuck in a slow node would keep renewing its
+# own claim by making progress reports about it.
+STEP_SQL = """
+UPDATE documents
+   SET current_step = %(current_step)s,
+       updated_at   = now()
+ WHERE id = %(document_id)s
+   AND status = 'PROCESSING'
+   AND attempt_count = %(attempt_count)s
+"""
+
+
 @dataclass(frozen=True)
 class Claim:
     document_id: uuid.UUID
@@ -199,6 +212,33 @@ def heartbeat(
         held = cur.fetchone() is not None
     conn.commit()
     return held
+
+
+def record_step(
+    conn: psycopg.Connection, document_id: uuid.UUID, attempt_count: int, node: str
+) -> None:
+    """Record which node just finished.
+
+    Called once per node so the frontend can show progress while a document is processing,
+    which is what architecture section 4 asks for. Fenced like every other write, so a
+    superseded worker cannot report progress onto a document it no longer owns.
+
+    Failures are swallowed: this is a progress indicator, and losing one is not a reason to
+    abandon a document that is otherwise processing correctly.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                STEP_SQL,
+                {
+                    "document_id": str(document_id),
+                    "attempt_count": attempt_count,
+                    "current_step": node,
+                },
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
 
 
 def _finish(conn: psycopg.Connection, sql: str, params: dict[str, Any]) -> bool:

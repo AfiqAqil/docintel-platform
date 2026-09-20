@@ -20,7 +20,7 @@ import boto3
 import psycopg
 
 from consumer import logging as consumer_logging
-from consumer.claim import Claim, claim, mark_completed, mark_failed
+from consumer.claim import Claim, claim, mark_completed, mark_failed, record_step
 from consumer.config import CONSUMER_CONFIG as CFG
 from consumer.heartbeat import Heartbeat
 from consumer.messages import Ack, DocumentEvent, S3TestEvent, UnparseableMessage, parse
@@ -255,6 +255,11 @@ class Worker:
                 # stream, not invoke, so current_step can be written as each node finishes.
                 for chunk in self.graph.stream(initial, stream_mode="updates"):
                     for node, update in chunk.items():
+                        # Written immediately rather than left to the next heartbeat. The
+                        # heartbeat runs every 30 seconds and most documents finish inside
+                        # that, so deferring it meant current_step was almost always null
+                        # and the progress the frontend promises never appeared.
+                        record_step(conn, event.document_id, claimed.attempt_count, node)
                         beat.set_step(node)
                         final.update(update)
                     if beat.lease_lost:

@@ -422,3 +422,41 @@ def test_a_superseded_worker_cannot_write_after_the_document_is_reclaimed(conn, 
         other_conn, document_id, "COMPLETE", "claim_form", None, attempt_count=b.attempt_count
     )
     assert status_of(conn, document_id)["status"] == "COMPLETED"
+
+
+def test_progress_is_recorded_per_node_and_fenced(conn, other_conn):
+    """current_step is written as each node finishes, not on the heartbeat's own clock.
+
+    Deferring it to the heartbeat meant it was almost always null, because the beat runs
+    every 30 seconds and most documents finish well inside that, so the progress the frontend
+    promises never appeared.
+    """
+    from consumer.claim import record_step
+
+    document_id = insert(conn, status="QUEUED")
+    claimed = claim(conn, document_id, lease_seconds=300)
+
+    record_step(conn, document_id, claimed.attempt_count, "classify")
+    assert status_of(conn, document_id)["current_step"] == "classify"
+
+    record_step(conn, document_id, claimed.attempt_count, "extract_claim")
+    assert status_of(conn, document_id)["current_step"] == "extract_claim"
+
+    # Writing progress must not renew the lease, or a worker stuck in a slow node would keep
+    # its own claim alive purely by reporting on it.
+    before = status_of(conn, document_id)["lease_expires_at"]
+    record_step(conn, document_id, claimed.attempt_count, "validate")
+    assert status_of(conn, document_id)["lease_expires_at"] == before
+
+    # And a superseded worker cannot report progress onto a document it no longer owns.
+    stale = claimed.attempt_count
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE documents SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
+            (str(document_id),),
+        )
+    conn.commit()
+    assert isinstance(claim(other_conn, document_id, lease_seconds=300), Claim)
+
+    record_step(conn, document_id, stale, "generate_report")
+    assert status_of(conn, document_id)["current_step"] != "generate_report"
