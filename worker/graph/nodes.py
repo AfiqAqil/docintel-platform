@@ -376,7 +376,7 @@ def generate_report(state: State) -> dict[str, Any]:
         "observations": list(dict.fromkeys(state.get("observations") or [])),
         # masked_trace, not trace: trace has an append only reducer and still holds
         # unmasked detail strings. Only the masked copy is ever persisted.
-        "trace": state.get("masked_trace") or [],
+        "trace": _full_trace(state),
     }
 
     return {"report": report, "outcome": outcome}
@@ -385,6 +385,40 @@ def generate_report(state: State) -> dict[str, Any]:
 # --------------------------------------------------------------------------------------
 # record_failure: deterministic
 # --------------------------------------------------------------------------------------
+
+
+
+def _full_trace(state: State) -> list[StepRecord]:
+    """The trace as the report should carry it: masked, and complete.
+
+    mask_pii writes `masked_trace` while it runs, so that copy necessarily stops before
+    mask_pii and generate_report have finished and cannot record themselves. Reporting it
+    alone leaves the last two nodes missing from the workflow status tracking, which is
+    exactly the part a reader checks to see that processing ran to the end.
+
+    The tail is taken from the live trace with its detail dropped rather than scrubbed. The
+    nodes it covers are deterministic and write no detail except on error, so there is
+    nothing to lose, and dropping is the safe direction: this runs after masking, so there
+    is no secrets list here to scrub with and a detail that did contain a value would go
+    straight into the report.
+
+    The report node itself is necessarily absent: its own trace entry is written once it
+    returns, so no record it builds can contain its own completion. The trace therefore ends
+    at the last node before the report was assembled, which for a successful run is mask_pii.
+    The consumer records the document reaching COMPLETED separately, which is where the end
+    of the run is actually observable.
+    """
+    masked = list(state.get("masked_trace") or [])
+    tail = list(state.get("trace") or [])[len(masked):]
+    return masked + [
+        StepRecord(
+            node=step["node"],
+            status=step["status"],
+            duration_ms=step["duration_ms"],
+            detail=None,
+        )
+        for step in tail
+    ]
 
 
 @node("record_failure")
@@ -410,7 +444,7 @@ def record_failure(state: State) -> dict[str, Any]:
             "missing_information": [],
             "validation_errors": [],
             "observations": list(state.get("observations") or []),
-            "trace": state.get("masked_trace") or [],
+            "trace": _full_trace(state),
             "error": dict(error),
         }
     }
