@@ -677,3 +677,32 @@ def test_masking_survives_a_sensitive_field_with_no_value(graph, fake_llm):
 
     assert result["report"]["extracted"]["claimant_name"]["value"] is None
     assert result["report"]["outcome"] == "INCOMPLETE"
+def test_classifier_notes_are_dropped_when_nothing_was_extracted(graph, fake_llm):
+    """The redaction set comes from the extracted fields, so on a route that extracts
+    nothing it is empty and scrubbing is a no-op that still looks like a control.
+
+    That is the unsupported route, where the document was never understood well enough to
+    extract from and the note is at its least predictable. The note is dropped there rather
+    than passed through. The prompt also asks the model not to quote identifiers, but a
+    prompt is a request, not a boundary.
+    """
+    leaky = "This looks like correspondence from Priya Wexford at 42 Windmere Lane."
+
+    result = _run(
+        graph,
+        fake_llm,
+        [
+            Classification(doc_type=DocType.UNKNOWN, confidence=0.9, notes=leaky),
+            "Summary.",
+        ],
+    )
+
+    assert result["report"]["extracted"] == {}
+    assert result["report"]["classification"]["notes"] is None
+
+    import json
+
+    assert "Priya Wexford" not in json.dumps(result["report"], default=str)
+    assert "Windmere" not in json.dumps(result["report"], default=str)
+    # The deterministic reason survives, which is the part that is actually useful.
+    assert any("manual review" in o for o in result["report"]["observations"])
