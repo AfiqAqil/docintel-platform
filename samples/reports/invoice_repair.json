@@ -1,0 +1,183 @@
+{
+  "document_id": "invoice_repair",
+  "generated_at": "2026-09-20T13:34:41Z",
+  "document_type": "invoice",
+  "classification": {
+    "confidence": 0.95,
+    "notes": "The document is an invoice detailing repairs made to a vehicle, including specific costs for various services and a total amount due, which aligns with the characteristics of an invoice."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The document is a complete invoice from a vehicle repair service issued on May 14, 2026. It details a transaction between the vendor and a masked customer, including a unique invoice number and a policy number. The invoice lists several line items for services rendered, which include front bumper replacement, paint and refinishing, labor for 12 hours, and a diagnostic scan, with each item's quantity, unit price, and total amount clearly stated. The subtotal for the services amounts to 1,865.50, with no tax applied, leading to a total invoice amount of 1,865.50. The invoice does not contain any missing information or additional observations.",
+  "extracted": {
+    "invoice_number": {
+      "value": "INV-2026-00456",
+      "snippet": "Invoice Number: INV-2026-00456",
+      "verified": true
+    },
+    "invoice_date": {
+      "value": "2026-05-14",
+      "snippet": "Invoice Date: 2026-05-14",
+      "verified": true
+    },
+    "vendor_name": {
+      "value": "Rustlebrook Auto Repairs",
+      "snippet": "Vendor: Rustlebrook Auto Repairs",
+      "verified": true
+    },
+    "customer_name": {
+      "value": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Customer Name: \u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "customer_address": {
+      "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022",
+      "snippet": "Customer Address: \u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022",
+      "verified": true
+    },
+    "policy_number": {
+      "value": "POL-004821",
+      "snippet": "Related Policy Number: POL-004821",
+      "verified": true
+    },
+    "line_items": [
+      {
+        "description": {
+          "value": "Front bumper replacement",
+          "snippet": "Front bumper replacement",
+          "verified": true
+        },
+        "quantity": {
+          "value": "1",
+          "snippet": "Qty: 1",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "450.00",
+          "snippet": "Unit Price: 450.00",
+          "verified": true
+        },
+        "amount": {
+          "value": "450.00",
+          "snippet": "Amount: 450.00",
+          "verified": true
+        }
+      },
+      {
+        "description": {
+          "value": "Paint and refinishing",
+          "snippet": "Paint and refinishing",
+          "verified": true
+        },
+        "quantity": {
+          "value": "1",
+          "snippet": "Qty: 1",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "320.50",
+          "snippet": "Unit Price: 320.50",
+          "verified": true
+        },
+        "amount": {
+          "value": "320.50",
+          "snippet": "Amount: 320.50",
+          "verified": true
+        }
+      },
+      {
+        "description": {
+          "value": "Labor, 12 hours",
+          "snippet": "Labor, 12 hours",
+          "verified": true
+        },
+        "quantity": {
+          "value": "12",
+          "snippet": "Qty: 12",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "85.00",
+          "snippet": "Unit Price: 85.00",
+          "verified": true
+        },
+        "amount": {
+          "value": "1,020.00",
+          "snippet": "Amount: 1,020.00",
+          "verified": true
+        }
+      },
+      {
+        "description": {
+          "value": "Diagnostic scan",
+          "snippet": "Diagnostic scan",
+          "verified": true
+        },
+        "quantity": {
+          "value": "1",
+          "snippet": "Qty: 1",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "75.00",
+          "snippet": "Unit Price: 75.00",
+          "verified": true
+        },
+        "amount": {
+          "value": "75.00",
+          "snippet": "Amount: 75.00",
+          "verified": true
+        }
+      }
+    ],
+    "subtotal": {
+      "value": "1865.50",
+      "snippet": "Subtotal: 1865.50",
+      "verified": true
+    },
+    "tax_amount": {
+      "value": "0.00",
+      "snippet": "Tax Amount: 0.00",
+      "verified": true
+    },
+    "total_amount": {
+      "value": "1,865.50",
+      "snippet": "Total Amount: 1,865.50",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 2,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1348,
+      "detail": null
+    },
+    {
+      "node": "extract_invoice",
+      "status": "ok",
+      "duration_ms": 7825,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

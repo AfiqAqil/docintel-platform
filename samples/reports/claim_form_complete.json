@@ -1,0 +1,103 @@
+{
+  "document_id": "claim_form_complete",
+  "generated_at": "2026-09-20T13:34:04Z",
+  "document_type": "claim_form",
+  "classification": {
+    "confidence": 0.95,
+    "notes": "The document is a claim form, as it contains specific details related to an insurance claim including claimant information, incident description, and claimed amount."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The document is a completed claim form regarding a water damage incident caused by a bursting kitchen pipe. The incident occurred on a specified date and was reported a few days later. The claim includes details about the damages to the flooring and cabinets, with a claimed amount for compensation. All necessary information for processing the claim appears to be present, and no additional information is required.",
+  "extracted": {
+    "policy_number": {
+      "value": "POL-004821",
+      "snippet": "Policy Number: POL-004821",
+      "verified": true
+    },
+    "claim_reference": {
+      "value": "CLM-2026-00931",
+      "snippet": "Claim Reference: CLM-2026-00931",
+      "verified": true
+    },
+    "claimant_name": {
+      "value": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Claimant Name: \u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "claimant_address": {
+      "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022",
+      "snippet": "Claimant Address: \u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022",
+      "verified": true
+    },
+    "claimant_phone": {
+      "value": "+\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u20220123",
+      "snippet": "Claimant Phone: +\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u20220123",
+      "verified": true
+    },
+    "claimant_email": {
+      "value": "\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022",
+      "snippet": "Claimant Email: \u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022",
+      "verified": true
+    },
+    "date_of_incident": {
+      "value": "2026-06-02",
+      "snippet": "Date of Incident: 2026-06-02",
+      "verified": true
+    },
+    "date_filed": {
+      "value": "2026-06-10",
+      "snippet": "Date Filed: 2026-06-10",
+      "verified": true
+    },
+    "incident_description": {
+      "value": "Kitchen pipe burst causing water damage to flooring and cabinets.",
+      "snippet": "Incident Description: Kitchen pipe burst causing water damage to flooring and cabinets.",
+      "verified": true
+    },
+    "incident_location": {
+      "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Incident Location: \u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "claimed_amount": {
+      "value": "3250.00",
+      "snippet": "Claimed Amount: 3250.00",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 3,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1495,
+      "detail": null
+    },
+    {
+      "node": "extract_claim",
+      "status": "ok",
+      "duration_ms": 3655,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "document_id": "corrupt_encrypted",
+  "generated_at": "2026-09-20T13:34:19Z",
+  "document_type": "unknown",
+  "outcome": "FAILED",
+  "summary": "Processing failed in load_document: PDF is encrypted and could not be opened",
+  "extracted": {},
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "error",
+      "duration_ms": 8,
+      "detail": null
+    }
+  ],
+  "error": {
+    "node": "load_document",
+    "kind": "terminal",
+    "message": "PDF is encrypted and could not be opened"
+  }
+}

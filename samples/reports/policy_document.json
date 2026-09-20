@@ -1,0 +1,92 @@
+{
+  "document_id": "policy_document",
+  "generated_at": "2026-09-20T13:34:48Z",
+  "document_type": "policy_document",
+  "classification": {
+    "confidence": 1.0,
+    "notes": "The document details a home insurance policy, including coverage limits, conditions, and policy period, indicating it is a policy document."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The processed document is a complete home insurance policy titled \"Quillmarsh Mutual Assurance - Home Insurance Policy,\" which outlines coverage for both the property and its contents. It includes a monetary amount referencing the coverage limit and is dated for the start of a new policy term. There were no missing pieces of information identified during the extraction process, although the extraction was attempted again due to prior validation errors.",
+  "extracted": {
+    "document_title": {
+      "value": "Quillmarsh Mutual Assurance - Home Insurance Policy",
+      "snippet": "Quillmarsh Mutual Assurance - Home Insurance Policy",
+      "verified": true
+    },
+    "reference_number": {
+      "value": "POL-004821",
+      "snippet": "Policy Number: POL-004821",
+      "verified": true
+    },
+    "related_party_name": {
+      "value": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Policyholder: \u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "date": {
+      "value": "2026-01-01",
+      "snippet": "Policy period: 2026-01-01 to 2026-12-31.",
+      "verified": true
+    },
+    "monetary_amount": {
+      "value": "250,000.00",
+      "snippet": "Buildings\n250,000.00",
+      "verified": true
+    },
+    "summary": {
+      "value": "This document is a home insurance policy providing cover for the property and its contents.",
+      "snippet": "This policy provides cover for the property and contents named above, subject to the limits and exclusions set out in the schedule below.",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [
+    "Extraction was retried once with the previous validation errors appended."
+  ],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 8,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1286,
+      "detail": null
+    },
+    {
+      "node": "extract_generic",
+      "status": "ok",
+      "duration_ms": 2044,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 2,
+      "detail": null
+    },
+    {
+      "node": "extract_generic",
+      "status": "ok",
+      "duration_ms": 2034,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}
