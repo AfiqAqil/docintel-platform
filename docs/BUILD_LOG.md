@@ -595,3 +595,130 @@ inside the container and SQS queues are region scoped. Nothing could find the qu
 Both agents' output built together on the first attempt. The API contract they coded against
 was generated from the running backend and committed first, so neither had to guess at the
 other side's shape.
+
+## Review fix: the report and the status are one step
+
+A review on PR 5 found the last unguarded gap in the at-least-once story, and it was a real
+one. `_record` committed `COMPLETED`, then published the report, then swallowed any failure
+of that publication and acked the message.
+
+The part that makes it unrecoverable is the ack rule two functions away. A returned message
+would be redelivered, the redelivery would find the document terminal, and the terminal
+branch deletes the message without reaching the publish at all. So nothing anywhere retried:
+one transient S3 error meant the report route returned 404 for the life of that document, and
+the worker logged it and moved on.
+
+Reproduced first, as a failing test, before anything was changed:
+
+```
+assert status_of(conn, document_id) == "PROCESSING"
+E   AssertionError: a document whose report was never stored must not be left terminal,
+E   because nothing would ever retry it
+E   assert 'COMPLETED' == 'PROCESSING'
+```
+
+### The fix
+
+The status write is now held open until the report is durable. `mark_completed` and
+`mark_failed` take `commit=False`, the consumer stores the report, and only then commits.
+A failed put rolls the transaction back, so the document stays `PROCESSING` with its lease
+running and the message is returned for SQS to redeliver the whole run.
+
+What makes that safe is the row lock the uncommitted `UPDATE` holds. Nobody else can take the
+document while the report is being written.
+
+**The first version of that lock test failed, and the failure was worth more than the test.**
+It set up a live lease, and no lock was ever contended:
+
+```
+>       with pytest.raises(psycopg.errors.LockNotAvailable):
+E       Failed: DID NOT RAISE LockNotAvailable
+```
+
+The reason is that `CLAIM_SQL` never matches a row whose lease is live, so a competing claim
+is refused outright and never reaches the lock. The lock only matters in the narrow window
+where the lease lapses after the status write and before the put finishes. The test now
+claims with a one second lease and sleeps past it, which is the real case.
+
+### A second finding, mine
+
+The fix only recovers if the returned message actually comes back to a claimable document.
+`lease_seconds` and the queue's `VisibilityTimeout` are both 120, deliberately, so that the
+two can never disagree. But the heartbeat set the visibility timeout first and the lease
+second, so the lease always landed a few milliseconds further out. A returned message became
+visible fractionally before its own lease died, the redelivery refused its own claim, and one
+of three attempts was spent doing nothing. The two calls are now the other way round.
+
+### Verification
+
+100 tests, up from 91. Six mutations, each failing exactly its own test and nothing else:
+
+| Mutation | Test that failed |
+|---|---|
+| `commit=True` on the status write | `assert 'COMPLETED' == 'PROCESSING'` |
+| the `conn.commit()` after a successful put removed | `assert 'PROCESSING' == 'COMPLETED'` |
+| visibility extended before the lease | `assert ['visibility', 'lease'] == ['lease', 'visibility']` |
+| the visibility timeout extended after the put rather than before it | `assert ['put', 'visibility:120'] == ['visibility:120', 'put']` |
+| the extension moved back outside the rollback | `RuntimeError: Throttled: rate exceeded` escapes `_record` |
+| the poll loop guard removed | `RuntimeError: the database went away` escapes `_handle` |
+
+```
+100 passed in 3.56s
+Success: no issues found in 35 source files
+All checks passed!
+```
+
+The second mutation is the one the earlier tests could not have caught: both existing publish
+tests replace `mark_completed`, so neither would have noticed a status write held open and
+never committed, which would strand every document in `PROCESSING`. That test reads the row
+back on a second connection so an open transaction on the first cannot hide the result.
+
+**Separately, not fixed here:** `ruff format --check` reports 12 files on `main` and 11 here.
+Formatting has never been part of the gate, only `ruff check`. CI in phase 10 should either
+not run `ruff format --check` or land a formatting pass of its own, rather than mixing an
+unrelated reformat into this change.
+
+### A third review finding, on the window the heartbeat no longer covers
+
+The review pointed out that the heartbeat context closes before `_publish_and_commit`, so
+nothing extends the visibility timeout across the two writes that follow. A `put_object` that
+botocore retires through its own retries can outlast whatever the last beat bought, and the
+message is then redelivered while this transaction still holds the row lock.
+
+The window is real. The stated consequence, a delete failing on a stale receipt handle, is
+not what happens: `DeleteMessage` with a superseded receipt handle is documented as possibly
+not deleting the message rather than as an error, and nothing is lost either way. The
+redelivered worker blocks on the row lock, waits for the commit, then finds the document
+terminal and deletes the message with its own valid receipt.
+
+What it actually costs is a delivery attempt, and three of those send a perfectly finished
+document to the dead letter queue and fire the alarm on it. That is worth closing, so the
+visibility timeout is now pushed out to a full window immediately before the report is
+written.
+
+The lease is deliberately not extended with it, which breaks the "one number for both" rule
+on purpose and for one bounded stretch: the row lock, not the lease, is what protects the
+document between the status write and the commit, and on a rollback a lease that lapses
+sooner is exactly what lets the redelivery reclaim the document instead of refusing itself.
+
+### A fourth finding, and the shape behind it
+
+The review then found that the new `extend_visibility` call sat outside the rollback. It is
+right, and the consequence is the one it names: an SQS throttle there escapes every frame up
+to the poll loop and ends the worker, with an uncommitted terminal status still open. The
+document itself survives, because the dying connection rolls back, but a throttle should not
+cost a task restart. The call is inside the try now, so a failed extension rolls back and
+returns the document.
+
+**The same shape was in four other places, and only one of them was reported.** `connect()`,
+`claim()`, `mark_completed()` and `self._delete()` can all raise on a transient fault, and
+each one ended the poll loop. So the fix is not only the one line: `_handle` now catches
+around `_process`, logs, and leaves the message alone. `with connect() as conn` has already
+rolled back any open transaction by the time the handler sees the exception, and the message
+is never deleted, so it returns after the visibility timeout.
+
+**The accepted cost, stated because it is a real trade and not a free win.** During a
+sustained outage every delivery now fails, so messages reach the dead letter queue after the
+redrive limit instead of waiting in the queue for a restarted task. That is still the better
+trade: the DLQ alarm makes the outage visible and `StartMessageMoveTask` redrives the
+messages in one call, whereas a crash loop is silent until someone reads the service events.

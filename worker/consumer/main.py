@@ -13,6 +13,7 @@ import signal
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -173,7 +174,26 @@ class Worker:
             return
 
         with consumer_logging.document_context(str(event.document_id)):
-            decision = self._process(event, receipt, receive_count)
+            try:
+                decision = self._process(event, receipt, receive_count)
+            except Exception:
+                # One message must never end the poll loop. Every AWS and database call in
+                # _process can raise on a transient fault, and without this the worker exits,
+                # ECS restarts the task, and a brief blip becomes a restart loop that trips
+                # the deployment circuit breaker.
+                #
+                # Nothing is lost by carrying on. The message is not deleted, so it returns
+                # after the visibility timeout, and `with connect() as conn` in _process has
+                # already rolled back any open transaction on the way out.
+                #
+                # The accepted cost: during a sustained outage every delivery fails, so
+                # messages reach the dead letter queue after the redrive limit instead of
+                # waiting in the queue for a restarted task. That is the better trade,
+                # because the DLQ alarm makes it visible and StartMessageMoveTask redrives
+                # them in one call, whereas a crash loop is silent until someone reads the
+                # service events.
+                log.exception("unhandled error while processing this message, leaving it")
+                return
             if decision is Ack.DELETE:
                 self._delete(receipt)
             else:
@@ -284,7 +304,9 @@ class Worker:
                 return Ack.RETURN
 
         report = final.get("report") or {}
-        return self._record(conn, event, report, final, claimed)
+        # extend_visibility is handed on because the heartbeat has stopped by this point and
+        # the two writes below still need a window to run in. See _publish_and_commit.
+        return self._record(conn, event, report, final, claimed, extend_visibility)
 
     def _record(
         self,
@@ -293,6 +315,7 @@ class Worker:
         report: dict[str, Any],
         final: dict[str, Any],
         claimed: Claim,
+        extend_visibility: Callable[[int], None],
     ) -> Ack:
         doc_type = str(report.get("document_type") or "") or None
 
@@ -307,15 +330,23 @@ class Worker:
         #
         # So the database write goes first, and the report is only published once ownership
         # is settled. A worker that has lost the lease now writes nothing at all.
+        #
+        # The status write is left uncommitted until the report is stored. It holds the row
+        # lock for that window, so no other worker can claim the document while the report is
+        # being written, and the two become one step: either the document is terminal and its
+        # report exists, or neither happened and the message is retried.
 
         if report.get("outcome") == "FAILED":
             message = (report.get("error") or {}).get("message", "processing failed")
             if not mark_failed(
-                conn, event.document_id, message, claimed.attempt_count, doc_type
+                conn, event.document_id, message, claimed.attempt_count, doc_type, commit=False
             ):
                 log.warning("lease lost before the failure could be recorded, discarding it")
                 return Ack.RETURN
-            self._publish_report(event.document_id, report)
+            if not self._publish_and_commit(
+                conn, event.document_id, report, extend_visibility
+            ):
+                return Ack.RETURN
             log.info("recorded FAILED")
             return Ack.DELETE
 
@@ -330,7 +361,13 @@ class Worker:
         )
 
         if not mark_completed(
-            conn, event.document_id, outcome, doc_type, summary, claimed.attempt_count
+            conn,
+            event.document_id,
+            outcome,
+            doc_type,
+            summary,
+            claimed.attempt_count,
+            commit=False,
         ):
             # The lease was taken between the last heartbeat and this write. The new owner
             # will produce its own result, so this one is dropped rather than forced in, and
@@ -338,7 +375,8 @@ class Worker:
             log.warning("lease lost before the result could be written, discarding it")
             return Ack.RETURN
 
-        self._publish_report(event.document_id, report)
+        if not self._publish_and_commit(conn, event.document_id, report, extend_visibility):
+            return Ack.RETURN
         log.info("recorded COMPLETED as %s", outcome)
         return Ack.DELETE
 
@@ -355,28 +393,62 @@ class Worker:
         except Exception:
             return "application/octet-stream"
 
-    def _publish_report(self, document_id: uuid.UUID, report: dict[str, Any]) -> None:
-        """Write the report, after ownership has already been settled by the database write.
+    def _publish_and_commit(
+        self,
+        conn: psycopg.Connection,
+        document_id: uuid.UUID,
+        report: dict[str, Any],
+        extend_visibility: Callable[[int], None],
+    ) -> bool:
+        """Store the report, then make the terminal status visible. Both, or neither.
 
-        A failure here leaves the document with a correct status and no report, which the
-        API surfaces as a 404 on the report route. That is a visible, honest degradation.
-        The alternative, publishing before the ownership check, traded it for a silent one:
-        a stored report belonging to a different run than the row describing it. A wrong
-        answer nobody can detect is worse than a missing one everybody can.
+        The status write above is deliberately still uncommitted, so it holds the row lock
+        while the report is written. Nobody else can claim the document in that window.
 
-        It is not retried and the message is still acked, because the document is finished
-        as far as status is concerned, and redelivery would find it terminal and ack it
-        anyway without reaching this line.
+        The visibility timeout is pushed out first, because the heartbeat stopped when the
+        graph finished and nothing is extending it any more. What is left of the window is
+        whatever the last beat bought, and a put_object that botocore retries can outlast it.
+        Nothing is lost when that happens, since a redelivered worker blocks on the row lock
+        and then finds the document terminal, but it spends a delivery attempt to learn that
+        and can push a finished document into the dead letter queue. The lease is
+        deliberately not extended alongside it: the row lock is what protects the document
+        until the commit, and on a rollback a lease that lapses sooner is exactly what lets
+        the redelivery reclaim the document.
+
+        If the put fails the transaction is rolled back, the document stays PROCESSING with
+        its lease running, and the message is returned for SQS to redeliver, which retries
+        the whole run. Committing the status first and letting the put fail was the earlier
+        behaviour and it was not recoverable: the redelivery found the document terminal and
+        deleted the message without ever reaching this line, so the report route stayed 404
+        for the life of the document.
         """
         try:
-            self.s3.put_object(
-                Bucket=CFG.s3_bucket,
-                Key=f"{CFG.report_prefix}{document_id}.json",
-                Body=json.dumps(report, indent=2, default=str).encode(),
-                ContentType="application/json",
-            )
+            # Inside the try, not before it. A failed extension is not cosmetic: the status
+            # write above is uncommitted and holding a row lock, so an SQS throttle here
+            # would escape with the transaction open and take the whole poll loop with it.
+            # If the window cannot be secured, the honest move is to give the document back
+            # rather than to start a write that nothing is protecting.
+            extend_visibility(CFG.lease_seconds)
+            self._publish_report(document_id, report)
         except Exception:
-            log.exception("status was recorded but the report could not be stored")
+            # This rollback is load bearing, not tidiness. The caller holds this connection
+            # inside a `with connect() as conn`, and psycopg commits on a clean exit from
+            # that block. Returning Ack.RETURN is a clean exit, so without rolling back here
+            # the status write would be committed on the way out anyway.
+            conn.rollback()
+            log.exception("could not finish the document durably, returning it for a retry")
+            return False
+        conn.commit()
+        return True
+
+    def _publish_report(self, document_id: uuid.UUID, report: dict[str, Any]) -> None:
+        """Write the report to S3. Raises, so the caller can roll the status write back."""
+        self.s3.put_object(
+            Bucket=CFG.s3_bucket,
+            Key=f"{CFG.report_prefix}{document_id}.json",
+            Body=json.dumps(report, indent=2, default=str).encode(),
+            ContentType="application/json",
+        )
 
     def _delete(self, receipt: str) -> None:
         self.sqs.delete_message(QueueUrl=CFG.queue_url, ReceiptHandle=receipt)

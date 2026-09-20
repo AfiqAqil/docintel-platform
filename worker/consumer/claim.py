@@ -241,12 +241,26 @@ def record_step(
         conn.rollback()
 
 
-def _finish(conn: psycopg.Connection, sql: str, params: dict[str, Any]) -> bool:
+def _finish(
+    conn: psycopg.Connection, sql: str, params: dict[str, Any], commit: bool = True
+) -> bool:
+    """Run one fenced finishing write.
+
+    With commit=False the transaction is left open when the write matched, so the caller can
+    make something else durable before the new status becomes visible to anyone. The row lock
+    the UPDATE took is held until the caller commits or rolls back, which is what stops
+    another worker claiming the document during that window.
+    """
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(sql, params)
         written = cur.fetchone() is not None
-    conn.commit()
-    return written
+    if not written:
+        # Nothing matched, so there is nothing to hold open either way.
+        conn.rollback()
+        return False
+    if commit:
+        conn.commit()
+    return True
 
 
 def mark_completed(
@@ -256,6 +270,7 @@ def mark_completed(
     doc_type: str | None,
     report_summary: str | None,
     attempt_count: int,
+    commit: bool = True,
 ) -> bool:
     """Record a successful run.
 
@@ -271,6 +286,7 @@ def mark_completed(
             "report_summary": report_summary,
             "attempt_count": attempt_count,
         },
+        commit=commit,
     )
 
 
@@ -280,6 +296,7 @@ def mark_failed(
     error_message: str,
     attempt_count: int,
     doc_type: str | None = None,
+    commit: bool = True,
 ) -> bool:
     """Record a terminal failure. Only the worker holding the current attempt may write it."""
     return _finish(
@@ -291,4 +308,5 @@ def mark_failed(
             "doc_type": doc_type,
             "attempt_count": attempt_count,
         },
+        commit=commit,
     )

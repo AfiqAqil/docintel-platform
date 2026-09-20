@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -460,3 +461,78 @@ def test_progress_is_recorded_per_node_and_fenced(conn, other_conn):
 
     record_step(conn, document_id, stale, "generate_report")
     assert status_of(conn, document_id)["current_step"] != "generate_report"
+
+
+def test_an_uncommitted_completion_locks_the_row_against_a_second_claim(conn, other_conn):
+    """The row lock is what makes the status write and the report publication one step.
+
+    The consumer holds COMPLETE_SQL open while it writes the report to S3, so that a failed
+    put can roll the status back. That is only safe if nobody else can take the document in
+    the meantime.
+
+    For most of that window nothing has to block: the lease is live, so a second claim does
+    not match the WHERE at all and is refused outright. The case that needs the lock is the
+    narrow one where the lease lapses after the status write and before the put finishes.
+    Then the second claim does match, and it must wait rather than overtake, which is what
+    the short lock_timeout below turns into a visible failure instead of a silent race.
+    """
+    document_id = insert(conn, status="QUEUED")
+    # A one second lease, so it can be allowed to lapse inside the test without a long wait.
+    claimed = claim(conn, document_id, lease_seconds=1)
+    assert isinstance(claimed, Claim)
+
+    # The consumer's window opens: the status is written, still holding the lease, and not
+    # yet committed because the report has not been stored.
+    assert mark_completed(
+        conn, document_id, "COMPLETE", "claim_form", None, claimed.attempt_count, commit=False
+    )
+
+    # The put is slow, and the lease lapses while it runs. A second worker now matches the
+    # expired lease clause, so only the row lock stands between it and the document.
+    time.sleep(1.2)
+
+    with other_conn.cursor() as cur:
+        cur.execute("SET lock_timeout = '500ms'")
+    with pytest.raises(psycopg.errors.LockNotAvailable):
+        claim(other_conn, document_id, lease_seconds=60)
+    other_conn.rollback()
+
+    # Once the consumer commits, the second worker sees a finished document rather than a
+    # claimable one, so it refuses for the right reason.
+    conn.commit()
+    refused = claim(other_conn, document_id, lease_seconds=60)
+    assert isinstance(refused, ClaimRefused)
+    assert refused.terminal
+
+
+def test_a_rolled_back_completion_leaves_the_document_claimable_again(conn, other_conn):
+    """The other half: when the report cannot be stored, the document must come back.
+
+    Rolling back releases the lock and restores PROCESSING with the lease the claim set, so
+    the redelivered message can be claimed again once that lease lapses.
+    """
+    document_id = insert(conn, status="QUEUED")
+    claimed = claim(conn, document_id, lease_seconds=60)
+    assert isinstance(claimed, Claim)
+
+    assert mark_completed(
+        conn, document_id, "COMPLETE", "claim_form", None, claimed.attempt_count, commit=False
+    )
+    conn.rollback()
+
+    row = status_of(conn, document_id)
+    assert row["status"] == "PROCESSING"
+    assert row["outcome"] is None, "the rollback must undo the outcome too"
+
+    # The lease the claim set is still live, so the redelivery only succeeds once it lapses.
+    # Expiring it here is what waiting out the visibility timeout does in production.
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE documents SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
+            (str(document_id),),
+        )
+    conn.commit()
+
+    reclaimed = claim(other_conn, document_id, lease_seconds=60)
+    assert isinstance(reclaimed, Claim)
+    assert reclaimed.attempt_count == 2
