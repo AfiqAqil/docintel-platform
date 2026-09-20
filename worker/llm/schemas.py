@@ -6,6 +6,12 @@ that every snippet actually appears in the source text and drops the field if it
 That deterministic check is the hallucination guard architecture section 5 describes, and it
 is the reason every field carries a snippet at all.
 
+Sensitive fields are tagged `{"pii": True}`, or `{"pii": "tail"}` for the few that are true
+identifiers and may keep their last few characters visible so a reviewer can tell two records
+apart. Tagging is opt in both ways: an untagged field is not masked, and a field tagged
+`True` is masked whole. Forgetting a tag should never be the thing that reveals a value, so
+the safer behaviour is the default in each case that matters.
+
 Two things every extraction schema exposes, read back by other modules rather than guessed at:
 
   - `REQUIRED_FIELDS`, a `ClassVar` tuple of field names, consumed by `validate` to produce
@@ -109,7 +115,9 @@ class ClaimFormExtraction(BaseModel):
     claimant_phone: ExtractedField = Field(
         default_factory=ExtractedField,
         description="The claimant's phone number.",
-        json_schema_extra={"pii": True},
+        # "tail" rather than True: the last four digits are how a reviewer tells two phone
+        # numbers apart, and that is the only reason a tail exists.
+        json_schema_extra={"pii": "tail"},
     )
     claimant_email: ExtractedField = Field(
         default_factory=ExtractedField,
@@ -128,7 +136,12 @@ class ClaimFormExtraction(BaseModel):
         description="A description of what happened, in the claimant's or form's own words.",
     )
     incident_location: ExtractedField = Field(
-        default_factory=ExtractedField, description="Where the incident took place."
+        default_factory=ExtractedField,
+        description="Where the incident took place.",
+        # A location tied to a named person is personal data, and on a home claim it is
+        # usually the claimant's own address. Masking the address field while leaving this
+        # one in the clear would have published the same value under a different key.
+        json_schema_extra={"pii": True},
     )
     claimed_amount: ExtractedField = Field(
         default_factory=ExtractedField, description="The monetary amount being claimed."
@@ -213,7 +226,9 @@ class IdentityExtraction(BaseModel):
     identity_number: ExtractedField = Field(
         default_factory=ExtractedField,
         description="The identity, passport or licence number on the document.",
-        json_schema_extra={"pii": True},
+        # "tail" rather than True: an identity number is exactly the case the visible tail
+        # was designed for. Everything else on this schema stays fully masked.
+        json_schema_extra={"pii": "tail"},
     )
     nationality: ExtractedField = Field(
         default_factory=ExtractedField, description="The nationality stated on the document."

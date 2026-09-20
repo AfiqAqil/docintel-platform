@@ -59,7 +59,11 @@ def classification_messages(text: str | None, images: list[bytes] | None) -> lis
             "You are a document classifier for an insurance document intake pipeline. Read "
             "the document and classify it into exactly one of these types: "
             f"{_DOC_TYPE_LIST}. Use 'unknown' if the document genuinely does not fit any of "
-            "the others. Give a short rationale for your choice."
+            "the others. Give a short rationale for your choice, describing the document "
+            "in general terms. Do not quote or repeat any name, address, phone number, "
+            "email address, identity number, policy number or other identifier in the "
+            "rationale: it is stored in the report, so anything quoted there outlives the "
+            "document itself."
         )
     )
 

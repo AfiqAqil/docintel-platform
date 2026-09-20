@@ -38,6 +38,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["consumer*", "graph*", "llm*", "rules*"]
 
+# config.py is a top level module, not a package, so packages.find does not pick it up.
+# Without this an installed wheel imports graph and llm fine and then fails on
+# `from config import CONFIG`, a failure that appears only in the container and never in a
+# source checkout.
+[tool.setuptools]
+py-modules = ["config"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
