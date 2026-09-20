@@ -39,3 +39,6 @@ dist/
 
 # local test environments
 .venv/
+
+# sample generator environment
+samples/.venv/

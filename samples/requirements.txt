@@ -1,0 +1,7 @@
+# Dependencies for samples/generate.py only. Not shipped in any container image, and never
+# added to worker/pyproject.toml, because this is development tooling, not application code.
+reportlab>=4.2
+pillow>=11.0
+python-docx>=1.1
+pypdf>=5.1
+pypdfium2>=4.30
