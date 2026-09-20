@@ -307,15 +307,21 @@ class Worker:
         #
         # So the database write goes first, and the report is only published once ownership
         # is settled. A worker that has lost the lease now writes nothing at all.
+        #
+        # The status write is left uncommitted until the report is stored. It holds the row
+        # lock for that window, so no other worker can claim the document while the report is
+        # being written, and the two become one step: either the document is terminal and its
+        # report exists, or neither happened and the message is retried.
 
         if report.get("outcome") == "FAILED":
             message = (report.get("error") or {}).get("message", "processing failed")
             if not mark_failed(
-                conn, event.document_id, message, claimed.attempt_count, doc_type
+                conn, event.document_id, message, claimed.attempt_count, doc_type, commit=False
             ):
                 log.warning("lease lost before the failure could be recorded, discarding it")
                 return Ack.RETURN
-            self._publish_report(event.document_id, report)
+            if not self._publish_and_commit(conn, event.document_id, report):
+                return Ack.RETURN
             log.info("recorded FAILED")
             return Ack.DELETE
 
@@ -330,7 +336,13 @@ class Worker:
         )
 
         if not mark_completed(
-            conn, event.document_id, outcome, doc_type, summary, claimed.attempt_count
+            conn,
+            event.document_id,
+            outcome,
+            doc_type,
+            summary,
+            claimed.attempt_count,
+            commit=False,
         ):
             # The lease was taken between the last heartbeat and this write. The new owner
             # will produce its own result, so this one is dropped rather than forced in, and
@@ -338,7 +350,8 @@ class Worker:
             log.warning("lease lost before the result could be written, discarding it")
             return Ack.RETURN
 
-        self._publish_report(event.document_id, report)
+        if not self._publish_and_commit(conn, event.document_id, report):
+            return Ack.RETURN
         log.info("recorded COMPLETED as %s", outcome)
         return Ack.DELETE
 
@@ -355,28 +368,38 @@ class Worker:
         except Exception:
             return "application/octet-stream"
 
-    def _publish_report(self, document_id: uuid.UUID, report: dict[str, Any]) -> None:
-        """Write the report, after ownership has already been settled by the database write.
+    def _publish_and_commit(
+        self, conn: psycopg.Connection, document_id: uuid.UUID, report: dict[str, Any]
+    ) -> bool:
+        """Store the report, then make the terminal status visible. Both, or neither.
 
-        A failure here leaves the document with a correct status and no report, which the
-        API surfaces as a 404 on the report route. That is a visible, honest degradation.
-        The alternative, publishing before the ownership check, traded it for a silent one:
-        a stored report belonging to a different run than the row describing it. A wrong
-        answer nobody can detect is worse than a missing one everybody can.
+        The status write above is deliberately still uncommitted, so it holds the row lock
+        while the report is written. Nobody else can claim the document in that window.
 
-        It is not retried and the message is still acked, because the document is finished
-        as far as status is concerned, and redelivery would find it terminal and ack it
-        anyway without reaching this line.
+        If the put fails the transaction is rolled back, the document stays PROCESSING with
+        its lease running, and the message is returned for SQS to redeliver, which retries
+        the whole run. Committing the status first and letting the put fail was the earlier
+        behaviour and it was not recoverable: the redelivery found the document terminal and
+        deleted the message without ever reaching this line, so the report route stayed 404
+        for the life of the document.
         """
         try:
-            self.s3.put_object(
-                Bucket=CFG.s3_bucket,
-                Key=f"{CFG.report_prefix}{document_id}.json",
-                Body=json.dumps(report, indent=2, default=str).encode(),
-                ContentType="application/json",
-            )
+            self._publish_report(document_id, report)
         except Exception:
-            log.exception("status was recorded but the report could not be stored")
+            conn.rollback()
+            log.exception("the report could not be stored, returning the message for a retry")
+            return False
+        conn.commit()
+        return True
+
+    def _publish_report(self, document_id: uuid.UUID, report: dict[str, Any]) -> None:
+        """Write the report to S3. Raises, so the caller can roll the status write back."""
+        self.s3.put_object(
+            Bucket=CFG.s3_bucket,
+            Key=f"{CFG.report_prefix}{document_id}.json",
+            Body=json.dumps(report, indent=2, default=str).encode(),
+            ContentType="application/json",
+        )
 
     def _delete(self, receipt: str) -> None:
         self.sqs.delete_message(QueueUrl=CFG.queue_url, ReceiptHandle=receipt)

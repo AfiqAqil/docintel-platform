@@ -595,3 +595,82 @@ inside the container and SQS queues are region scoped. Nothing could find the qu
 Both agents' output built together on the first attempt. The API contract they coded against
 was generated from the running backend and committed first, so neither had to guess at the
 other side's shape.
+
+## Review fix: the report and the status are one step
+
+A review on PR 5 found the last unguarded gap in the at-least-once story, and it was a real
+one. `_record` committed `COMPLETED`, then published the report, then swallowed any failure
+of that publication and acked the message.
+
+The part that makes it unrecoverable is the ack rule two functions away. A returned message
+would be redelivered, the redelivery would find the document terminal, and the terminal
+branch deletes the message without reaching the publish at all. So nothing anywhere retried:
+one transient S3 error meant the report route returned 404 for the life of that document, and
+the worker logged it and moved on.
+
+Reproduced first, as a failing test, before anything was changed:
+
+```
+assert status_of(conn, document_id) == "PROCESSING"
+E   AssertionError: a document whose report was never stored must not be left terminal,
+E   because nothing would ever retry it
+E   assert 'COMPLETED' == 'PROCESSING'
+```
+
+### The fix
+
+The status write is now held open until the report is durable. `mark_completed` and
+`mark_failed` take `commit=False`, the consumer stores the report, and only then commits.
+A failed put rolls the transaction back, so the document stays `PROCESSING` with its lease
+running and the message is returned for SQS to redeliver the whole run.
+
+What makes that safe is the row lock the uncommitted `UPDATE` holds. Nobody else can take the
+document while the report is being written.
+
+**The first version of that lock test failed, and the failure was worth more than the test.**
+It set up a live lease, and no lock was ever contended:
+
+```
+>       with pytest.raises(psycopg.errors.LockNotAvailable):
+E       Failed: DID NOT RAISE LockNotAvailable
+```
+
+The reason is that `CLAIM_SQL` never matches a row whose lease is live, so a competing claim
+is refused outright and never reaches the lock. The lock only matters in the narrow window
+where the lease lapses after the status write and before the put finishes. The test now
+claims with a one second lease and sleeps past it, which is the real case.
+
+### A second finding, mine
+
+The fix only recovers if the returned message actually comes back to a claimable document.
+`lease_seconds` and the queue's `VisibilityTimeout` are both 120, deliberately, so that the
+two can never disagree. But the heartbeat set the visibility timeout first and the lease
+second, so the lease always landed a few milliseconds further out. A returned message became
+visible fractionally before its own lease died, the redelivery refused its own claim, and one
+of three attempts was spent doing nothing. The two calls are now the other way round.
+
+### Verification
+
+96 tests, up from 91. Three mutations, each failing exactly its own test and nothing else:
+
+| Mutation | Test that failed |
+|---|---|
+| `commit=True` on the status write | `assert 'COMPLETED' == 'PROCESSING'` |
+| the `conn.commit()` after a successful put removed | `assert 'PROCESSING' == 'COMPLETED'` |
+| visibility extended before the lease | `assert ['visibility', 'lease'] == ['lease', 'visibility']` |
+
+```
+96 passed in 3.35s
+Success: no issues found in 35 source files
+All checks passed!
+```
+
+The second mutation is the one the earlier tests could not have caught: both existing publish
+tests replace `mark_completed`, so neither would have noticed a status write held open and
+never committed, which would strand every document in `PROCESSING`. That test reads the row
+back on a second connection so an open transaction on the first cannot hide the result.
+
+**Separately, not fixed here:** `ruff format --check` reports 12 files on `main` and 11 here.
+Formatting has never been part of the gate, only `ruff check`. CI in phase 10 should either
+not run `ruff format --check` or land a formatting pass of its own, rather than mixing an
+unrelated reformat into this change.

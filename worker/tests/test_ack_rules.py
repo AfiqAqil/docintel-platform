@@ -58,9 +58,10 @@ class FakeSQS:
 
 
 class FakeS3:
-    def __init__(self, body: bytes = b"", fail: bool = False) -> None:
+    def __init__(self, body: bytes = b"", fail: bool = False, fail_put: bool = False) -> None:
         self._body = body
         self._fail = fail
+        self._fail_put = fail_put
         self.puts: list[str] = []
 
     def get_object(self, **_: Any) -> dict[str, Any]:
@@ -80,6 +81,8 @@ class FakeS3:
         return {"ContentType": "application/pdf"}
 
     def put_object(self, Key: str, **_: Any) -> None:
+        if self._fail_put:
+            raise RuntimeError("S3 is unavailable")
         self.puts.append(Key)
 
 
@@ -291,3 +294,72 @@ def test_the_holder_of_the_lease_publishes_exactly_one_report(conn, monkeypatch)
 
     assert decision is consumer_main.Ack.DELETE
     assert s3.puts == [f"reports/{document_id}.json"]
+
+
+def test_a_report_that_cannot_be_stored_leaves_the_document_retryable(conn, monkeypatch):
+    """The status and the report are one step, so a failed put must undo the status write.
+
+    This is the case that has no second chance. Committing COMPLETED and then failing to
+    store the report looks survivable, but it is not: the redelivered message finds the
+    document terminal, deletes itself, and the report route returns 404 for the life of the
+    document. Nothing anywhere retries. So the status write is held open until the report is
+    durable, and a failed put rolls it back and returns the message instead.
+    """
+    from consumer import main as consumer_main
+    from consumer.claim import claim as take_claim
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    s3 = FakeS3(fail_put=True)
+    worker = make_worker(monkeypatch, sqs, s3)
+
+    # A real claim, so the fencing token in the finishing write is the real one.
+    claimed = take_claim(conn, document_id, 120)
+
+    decision = worker._record(
+        conn,
+        type("E", (), {"document_id": document_id})(),
+        {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
+        {"outcome": "COMPLETE"},
+        claimed,
+    )
+
+    assert decision is consumer_main.Ack.RETURN
+    assert sqs.deleted == []
+    assert s3.puts == []
+    assert status_of(conn, document_id) == "PROCESSING", (
+        "a document whose report was never stored must not be left terminal, "
+        "because nothing would ever retry it"
+    )
+
+
+def test_a_stored_report_commits_the_completion(conn, monkeypatch):
+    """The other half of the atomic pair, with nothing stubbed out.
+
+    The two tests above both replace mark_completed, so neither would notice if the status
+    write were held open and never committed. That failure would leave every document
+    stuck in PROCESSING forever, so it is worth one test that runs the real conditional
+    write, the real put, and then looks at the row.
+    """
+    from consumer import main as consumer_main
+    from consumer.claim import claim as take_claim
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    s3 = FakeS3()
+    worker = make_worker(monkeypatch, sqs, s3)
+    claimed = take_claim(conn, document_id, 120)
+
+    decision = worker._record(
+        conn,
+        type("E", (), {"document_id": document_id})(),
+        {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
+        {"outcome": "COMPLETE"},
+        claimed,
+    )
+
+    assert decision is consumer_main.Ack.DELETE
+    assert s3.puts == [f"reports/{document_id}.json"]
+    # Read on a second connection, so a transaction left open on the first cannot hide it.
+    with psycopg.connect(DSN) as other:
+        assert status_of(other, document_id) == "COMPLETED"

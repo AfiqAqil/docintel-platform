@@ -84,7 +84,13 @@ class Heartbeat:
         try:
             while not self._stop.wait(self._interval):
                 try:
-                    self._extend_visibility(self._lease_seconds)
+                    # The lease is extended first, and only then the visibility timeout.
+                    # Both are pushed to the same number of seconds, but whichever is set
+                    # last lands a few milliseconds further out, and that skew has to fall
+                    # on the visibility timeout. The other way round the message becomes
+                    # visible fractionally before the lease dies, so a worker that returns a
+                    # message finds its own lease still live on the redelivery and burns an
+                    # attempt doing nothing.
                     held = extend_lease(
                         conn,
                         self._document_id,
@@ -92,6 +98,7 @@ class Heartbeat:
                         self._attempt_count,
                         self._current_step,
                     )
+                    self._extend_visibility(self._lease_seconds)
                 except Exception:
                     # A failed beat is not fatal on its own: the next one may succeed well
                     # before the lease runs out. Losing the lease is what is fatal, and that
