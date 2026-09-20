@@ -116,6 +116,11 @@ class Document(Base):
             "outcome IS NULL OR outcome IN ('COMPLETE','INCOMPLETE','UNSUPPORTED')",
             name="ck_documents_outcome",
         ),
+        # Validation at the edge is not a guarantee about the table. Anything writing here
+        # that is not the API, a migration, a fix applied by hand, a future service, is not
+        # covered by a Pydantic model, and a negative size is impossible rather than merely
+        # unwanted.
+        CheckConstraint("size_bytes > 0", name="ck_documents_size_positive"),
         # An outcome only means anything once processing finished. Without this a row can
         # claim to be QUEUED and COMPLETE at the same time.
         CheckConstraint(

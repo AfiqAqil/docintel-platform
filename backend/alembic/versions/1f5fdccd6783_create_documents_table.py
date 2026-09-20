@@ -39,6 +39,7 @@ def upgrade() -> None:
     sa.Column('uploaded_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
     sa.CheckConstraint("outcome IS NULL OR outcome IN ('COMPLETE','INCOMPLETE','UNSUPPORTED')", name='ck_documents_outcome'),
+    sa.CheckConstraint('size_bytes > 0', name='ck_documents_size_positive'),
     sa.CheckConstraint("outcome IS NULL OR status = 'COMPLETED'", name='ck_documents_outcome_requires_completed'),
     sa.CheckConstraint("status IN ('UPLOADING','QUEUED','PROCESSING','COMPLETED','FAILED','EXPIRED')", name='ck_documents_status'),
     sa.PrimaryKeyConstraint('id')
