@@ -651,7 +651,7 @@ of three attempts was spent doing nothing. The two calls are now the other way r
 
 ### Verification
 
-98 tests, up from 91. Four mutations, each failing exactly its own test and nothing else:
+100 tests, up from 91. Six mutations, each failing exactly its own test and nothing else:
 
 | Mutation | Test that failed |
 |---|---|
@@ -659,9 +659,11 @@ of three attempts was spent doing nothing. The two calls are now the other way r
 | the `conn.commit()` after a successful put removed | `assert 'PROCESSING' == 'COMPLETED'` |
 | visibility extended before the lease | `assert ['visibility', 'lease'] == ['lease', 'visibility']` |
 | the visibility timeout extended after the put rather than before it | `assert ['put', 'visibility:120'] == ['visibility:120', 'put']` |
+| the extension moved back outside the rollback | `RuntimeError: Throttled: rate exceeded` escapes `_record` |
+| the poll loop guard removed | `RuntimeError: the database went away` escapes `_handle` |
 
 ```
-98 passed in 3.45s
+100 passed in 3.56s
 Success: no issues found in 35 source files
 All checks passed!
 ```
@@ -698,3 +700,25 @@ The lease is deliberately not extended with it, which breaks the "one number for
 on purpose and for one bounded stretch: the row lock, not the lease, is what protects the
 document between the status write and the commit, and on a rollback a lease that lapses
 sooner is exactly what lets the redelivery reclaim the document instead of refusing itself.
+
+### A fourth finding, and the shape behind it
+
+The review then found that the new `extend_visibility` call sat outside the rollback. It is
+right, and the consequence is the one it names: an SQS throttle there escapes every frame up
+to the poll loop and ends the worker, with an uncommitted terminal status still open. The
+document itself survives, because the dying connection rolls back, but a throttle should not
+cost a task restart. The call is inside the try now, so a failed extension rolls back and
+returns the document.
+
+**The same shape was in four other places, and only one of them was reported.** `connect()`,
+`claim()`, `mark_completed()` and `self._delete()` can all raise on a transient fault, and
+each one ended the poll loop. So the fix is not only the one line: `_handle` now catches
+around `_process`, logs, and leaves the message alone. `with connect() as conn` has already
+rolled back any open transaction by the time the handler sees the exception, and the message
+is never deleted, so it returns after the visibility timeout.
+
+**The accepted cost, stated because it is a real trade and not a free win.** During a
+sustained outage every delivery now fails, so messages reach the dead letter queue after the
+redrive limit instead of waiting in the queue for a restarted task. That is still the better
+trade: the DLQ alarm makes the outage visible and `StartMessageMoveTask` redrives the
+messages in one call, whereas a crash loop is silent until someone reads the service events.

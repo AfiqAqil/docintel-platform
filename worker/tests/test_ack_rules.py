@@ -440,3 +440,62 @@ def test_the_visibility_timeout_is_extended_before_the_report_is_written(conn, m
     )
 
     assert order == [f"visibility:{CONSUMER_CONFIG.lease_seconds}", "put"]
+
+
+def test_a_failed_visibility_extension_rolls_back_and_returns_the_message(conn, monkeypatch):
+    """The extension is a write like any other, and it runs with a transaction open.
+
+    An SQS throttle here used to escape every frame up to the poll loop, taking the worker
+    down with an uncommitted terminal status still open. The document survived that, because
+    the dying connection rolled back, but a transient throttle should not cost a task
+    restart. It is inside the rollback now, so it returns the document instead.
+    """
+    from consumer import main as consumer_main
+    from consumer.claim import claim as take_claim
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    s3 = FakeS3()
+    worker = make_worker(monkeypatch, sqs, s3)
+    claimed = take_claim(conn, document_id, 120)
+
+    def throttled(_: int) -> None:
+        raise RuntimeError("Throttled: rate exceeded")
+
+    decision = worker._record(
+        conn,
+        type("E", (), {"document_id": document_id})(),
+        {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
+        {"outcome": "COMPLETE"},
+        claimed,
+        throttled,
+    )
+
+    assert decision is consumer_main.Ack.RETURN
+    assert s3.puts == [], "nothing may be written once the window could not be secured"
+    with psycopg.connect(DSN) as other:
+        assert status_of(other, document_id) == "PROCESSING"
+
+
+def test_an_unexpected_error_leaves_the_message_and_keeps_the_loop_running(conn, monkeypatch):
+    """The shape behind the finding above, rather than the one instance of it.
+
+    Every AWS and database call in _process can raise on a transient fault, and each one used
+    to end the poll loop. The message is left alone so it returns after the visibility
+    timeout, and the worker carries on with the next one.
+    """
+    from consumer import main as consumer_main
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    worker = make_worker(monkeypatch, sqs, FakeS3())
+
+    def boom(*_: Any, **__: Any):
+        raise RuntimeError("the database went away")
+
+    monkeypatch.setattr(consumer_main, "claim", boom)
+
+    worker._handle(message(document_id))
+
+    assert sqs.deleted == [], "an error of unknown cause must not destroy the only copy"
+    assert status_of(conn, document_id) == "QUEUED"

@@ -174,7 +174,26 @@ class Worker:
             return
 
         with consumer_logging.document_context(str(event.document_id)):
-            decision = self._process(event, receipt, receive_count)
+            try:
+                decision = self._process(event, receipt, receive_count)
+            except Exception:
+                # One message must never end the poll loop. Every AWS and database call in
+                # _process can raise on a transient fault, and without this the worker exits,
+                # ECS restarts the task, and a brief blip becomes a restart loop that trips
+                # the deployment circuit breaker.
+                #
+                # Nothing is lost by carrying on. The message is not deleted, so it returns
+                # after the visibility timeout, and `with connect() as conn` in _process has
+                # already rolled back any open transaction on the way out.
+                #
+                # The accepted cost: during a sustained outage every delivery fails, so
+                # messages reach the dead letter queue after the redrive limit instead of
+                # waiting in the queue for a restarted task. That is the better trade,
+                # because the DLQ alarm makes it visible and StartMessageMoveTask redrives
+                # them in one call, whereas a crash loop is silent until someone reads the
+                # service events.
+                log.exception("unhandled error while processing this message, leaving it")
+                return
             if decision is Ack.DELETE:
                 self._delete(receipt)
             else:
@@ -403,8 +422,13 @@ class Worker:
         deleted the message without ever reaching this line, so the report route stayed 404
         for the life of the document.
         """
-        extend_visibility(CFG.lease_seconds)
         try:
+            # Inside the try, not before it. A failed extension is not cosmetic: the status
+            # write above is uncommitted and holding a row lock, so an SQS throttle here
+            # would escape with the transaction open and take the whole poll loop with it.
+            # If the window cannot be secured, the honest move is to give the document back
+            # rather than to start a write that nothing is protecting.
+            extend_visibility(CFG.lease_seconds)
             self._publish_report(document_id, report)
         except Exception:
             # This rollback is load bearing, not tidiness. The caller holds this connection
@@ -412,7 +436,7 @@ class Worker:
             # that block. Returning Ack.RETURN is a clean exit, so without rolling back here
             # the status write would be committed on the way out anyway.
             conn.rollback()
-            log.exception("the report could not be stored, returning the message for a retry")
+            log.exception("could not finish the document durably, returning it for a retry")
             return False
         conn.commit()
         return True
