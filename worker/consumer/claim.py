@@ -51,6 +51,16 @@ RETURNING id, status, attempt_count, lease_expires_at
 # deletes work that is still in flight or loops on a document that is done.
 PEEK_SQL = "SELECT id, status, lease_expires_at FROM documents WHERE id = %(document_id)s"
 
+# attempt_count is the fencing token, and it is the reason these statements are correct.
+#
+# Checking that the row is PROCESSING with a live lease says a lease is held. It does not say
+# who holds it, and that distinction is not academic: a worker whose lease lapsed, whose
+# document was reclaimed, and which then woke up and beat, would push the lease out again and
+# pass exactly that check while another worker owned the document.
+#
+# The claim increments attempt_count and returns it, so every worker carries the number its
+# own claim produced. A reclaim bumps it, which invalidates the previous holder's token
+# permanently. There is no window in which two workers hold the same one.
 HEARTBEAT_SQL = """
 UPDATE documents
    SET lease_expires_at = now() + make_interval(secs => %(lease_seconds)s),
@@ -59,12 +69,12 @@ UPDATE documents
  WHERE id = %(document_id)s
    AND status = 'PROCESSING'
    AND lease_expires_at > now()
+   AND attempt_count = %(attempt_count)s
 RETURNING lease_expires_at
 """
 
-# Every write that finishes a document is conditional on still holding the lease. A worker
-# whose lease expired has already had the document taken from it, and must not overwrite the
-# new owner's result with its own stale one.
+# Every write that finishes a document is conditional on still holding this attempt, not
+# merely on a lease being live. See the note above HEARTBEAT_SQL.
 COMPLETE_SQL = """
 UPDATE documents
    SET status           = 'COMPLETED',
@@ -79,6 +89,7 @@ UPDATE documents
  WHERE id = %(document_id)s
    AND status = 'PROCESSING'
    AND lease_expires_at > now()
+   AND attempt_count = %(attempt_count)s
 RETURNING id
 """
 
@@ -95,6 +106,7 @@ UPDATE documents
  WHERE id = %(document_id)s
    AND status = 'PROCESSING'
    AND lease_expires_at > now()
+   AND attempt_count = %(attempt_count)s
 RETURNING id
 """
 
@@ -165,12 +177,14 @@ def heartbeat(
     conn: psycopg.Connection,
     document_id: uuid.UUID,
     lease_seconds: int,
+    attempt_count: int,
     current_step: str | None = None,
 ) -> bool:
     """Extend the lease, and record which node is running.
 
-    Returns False when the lease was already lost, which tells the caller to stop: someone
-    else owns the document now, and finishing would overwrite their work.
+    `attempt_count` is the token this worker's own claim returned. Returns False when it is
+    no longer the current one, which tells the caller to stop: someone else owns the document
+    now, and finishing would overwrite their work.
     """
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
@@ -179,6 +193,7 @@ def heartbeat(
                 "document_id": str(document_id),
                 "lease_seconds": lease_seconds,
                 "current_step": current_step,
+                "attempt_count": attempt_count,
             },
         )
         held = cur.fetchone() is not None
@@ -200,8 +215,12 @@ def mark_completed(
     outcome: str,
     doc_type: str | None,
     report_summary: str | None,
+    attempt_count: int,
 ) -> bool:
-    """Record a successful run. False means the lease was lost and nothing was written."""
+    """Record a successful run.
+
+    False means this worker no longer holds the attempt it claimed, so nothing was written.
+    """
     return _finish(
         conn,
         COMPLETE_SQL,
@@ -210,6 +229,7 @@ def mark_completed(
             "outcome": outcome,
             "doc_type": doc_type,
             "report_summary": report_summary,
+            "attempt_count": attempt_count,
         },
     )
 
@@ -218,9 +238,10 @@ def mark_failed(
     conn: psycopg.Connection,
     document_id: uuid.UUID,
     error_message: str,
+    attempt_count: int,
     doc_type: str | None = None,
 ) -> bool:
-    """Record a terminal failure. Only the worker holding the lease may write FAILED."""
+    """Record a terminal failure. Only the worker holding the current attempt may write it."""
     return _finish(
         conn,
         FAIL_SQL,
@@ -228,5 +249,6 @@ def mark_failed(
             "document_id": str(document_id),
             "error_message": error_message[:2048],
             "doc_type": doc_type,
+            "attempt_count": attempt_count,
         },
     )

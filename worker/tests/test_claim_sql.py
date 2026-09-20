@@ -110,7 +110,12 @@ def insert(
 def status_of(conn: psycopg.Connection, document_id: uuid.UUID) -> dict:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT * FROM documents WHERE id = %s", (str(document_id),))
-        return cur.fetchone()
+        row = cur.fetchone()
+    # Every caller has just inserted or claimed this row, so a miss is a broken test rather
+    # than a case to handle. Failing here names the problem instead of raising a
+    # TypeError three lines later.
+    assert row is not None, f"no row for {document_id}"
+    return row
 
 
 # ---------------------------------------------------------------------------------------
@@ -206,10 +211,19 @@ def test_two_workers_racing_for_the_same_document_produce_exactly_one_winner(con
 
 def test_heartbeat_extends_the_lease_and_records_the_step(conn):
     document_id = insert(conn, status="QUEUED")
-    claim(conn, document_id, lease_seconds=2)
+    claimed = claim(conn, document_id, lease_seconds=2)
     before = status_of(conn, document_id)["lease_expires_at"]
 
-    assert heartbeat(conn, document_id, lease_seconds=600, current_step="classify") is True
+    assert (
+        heartbeat(
+            conn,
+            document_id,
+            lease_seconds=600,
+            attempt_count=claimed.attempt_count,
+            current_step="classify",
+        )
+        is True
+    )
 
     after = status_of(conn, document_id)
     assert after["lease_expires_at"] > before
@@ -220,34 +234,40 @@ def test_heartbeat_fails_once_the_lease_has_been_taken(conn, other_conn):
     """Tells a worker it has been superseded, so it stops rather than finishing over the
     top of whoever owns the document now."""
     document_id = insert(conn, status="PROCESSING", lease_offset_seconds=-1)
+    stale_attempt = status_of(conn, document_id)["attempt_count"]
     assert isinstance(claim(other_conn, document_id, lease_seconds=300), Claim)
 
-    # The original worker's own lease is long gone, so its heartbeat must not resurrect it.
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE documents SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
-            (str(document_id),),
-        )
-    conn.commit()
-
-    assert heartbeat(conn, document_id, lease_seconds=60) is False
+    # The original worker carries the token from before the reclaim, so its beat is refused
+    # even though the row is PROCESSING with a live lease, which is the whole point.
+    assert heartbeat(conn, document_id, lease_seconds=60, attempt_count=stale_attempt) is False
 
 
 def test_a_worker_that_lost_its_lease_cannot_write_a_result(conn):
     """Without the lease condition on the write, a slow worker finishing late would
     overwrite the result of the worker that took the document from it."""
     document_id = insert(conn, status="PROCESSING", lease_offset_seconds=-1)
+    attempt = status_of(conn, document_id)["attempt_count"]
 
-    assert mark_completed(conn, document_id, "COMPLETE", "claim_form", None) is False
-    assert mark_failed(conn, document_id, "boom") is False
+    assert (
+        mark_completed(conn, document_id, "COMPLETE", "claim_form", None, attempt_count=attempt)
+        is False
+    )
+    assert mark_failed(conn, document_id, "boom", attempt_count=attempt) is False
     assert status_of(conn, document_id)["status"] == "PROCESSING"
 
 
 def test_the_holder_of_the_lease_can_complete_and_fail(conn):
     document_id = insert(conn, status="QUEUED")
-    claim(conn, document_id, lease_seconds=300)
+    claimed = claim(conn, document_id, lease_seconds=300)
 
-    assert mark_completed(conn, document_id, "INCOMPLETE", "claim_form", '{"summary": "x"}')
+    assert mark_completed(
+        conn,
+        document_id,
+        "INCOMPLETE",
+        "claim_form",
+        '{"summary": "x"}',
+        attempt_count=claimed.attempt_count,
+    )
 
     row = status_of(conn, document_id)
     assert row["status"] == "COMPLETED"
@@ -260,9 +280,15 @@ def test_failing_leaves_no_outcome(conn):
     """The database refuses an outcome on a row that is not COMPLETED, so a failure that
     tried to carry one would be rejected rather than stored."""
     document_id = insert(conn, status="QUEUED")
-    claim(conn, document_id, lease_seconds=300)
+    claimed = claim(conn, document_id, lease_seconds=300)
 
-    assert mark_failed(conn, document_id, "PDF is encrypted", doc_type="unknown")
+    assert mark_failed(
+        conn,
+        document_id,
+        "PDF is encrypted",
+        attempt_count=claimed.attempt_count,
+        doc_type="unknown",
+    )
 
     row = status_of(conn, document_id)
     assert row["status"] == "FAILED"
@@ -340,3 +366,59 @@ def test_reaper_does_not_touch_finished_documents(conn):
         insert(conn, status=status, lease_offset_seconds=-86400, created_offset_seconds=86400)
 
     assert reap(conn, processing_grace_seconds=600, upload_expiry_seconds=900).total == 0
+
+
+def test_a_superseded_worker_cannot_write_after_the_document_is_reclaimed(conn, other_conn):
+    """The fencing test. Holding a lease is not the same as holding THIS lease.
+
+    Sequence, all of it legal:
+      1. A claims with a short lease.
+      2. A stalls long enough for the lease to lapse.
+      3. B reclaims, which is correct: an expired lease is available.
+      4. A wakes up and beats, which pushes the lease out again.
+      5. A writes its result.
+
+    At step 5 the row is PROCESSING with a live lease, so a check for those two things alone
+    passes, and A overwrites B's document while B is still working on it. The statements need
+    to know not just that a lease is held, but by whom.
+    """
+    document_id = insert(conn, status="QUEUED")
+
+    a = claim(conn, document_id, lease_seconds=1)
+    assert isinstance(a, Claim)
+
+    # The lease lapses.
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE documents SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
+            (str(document_id),),
+        )
+    conn.commit()
+
+    b = claim(other_conn, document_id, lease_seconds=300)
+    assert isinstance(b, Claim)
+    assert b.attempt_count == a.attempt_count + 1, "B is a later attempt than A"
+
+    # A wakes up. Its heartbeat must not succeed, because the document is not A's any more.
+    assert heartbeat(conn, document_id, lease_seconds=300, attempt_count=a.attempt_count) is False
+
+    # And A's result must not land on top of B's document.
+    assert (
+        mark_completed(
+            conn, document_id, "COMPLETE", "claim_form", None, attempt_count=a.attempt_count
+        )
+        is False
+    )
+    assert (
+        mark_failed(conn, document_id, "stale failure", attempt_count=a.attempt_count) is False
+    )
+
+    row = status_of(conn, document_id)
+    assert row["status"] == "PROCESSING", "B still owns it"
+    assert row["attempt_count"] == b.attempt_count
+
+    # B, which does hold the current attempt, can still finish normally.
+    assert mark_completed(
+        other_conn, document_id, "COMPLETE", "claim_form", None, attempt_count=b.attempt_count
+    )
+    assert status_of(conn, document_id)["status"] == "COMPLETED"

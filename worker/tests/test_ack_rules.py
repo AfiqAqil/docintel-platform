@@ -264,6 +264,7 @@ def test_a_worker_that_lost_its_lease_writes_nothing_at_all(conn, monkeypatch):
         type("E", (), {"document_id": document_id})(),
         {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
         {"outcome": "COMPLETE"},
+        type("C", (), {"attempt_count": 1})(),
     )
 
     assert decision is consumer_main.Ack.RETURN
@@ -285,6 +286,7 @@ def test_the_holder_of_the_lease_publishes_exactly_one_report(conn, monkeypatch)
         type("E", (), {"document_id": document_id})(),
         {"document_type": "claim_form", "outcome": "COMPLETE", "summary": "s"},
         {"outcome": "COMPLETE"},
+        type("C", (), {"attempt_count": 1})(),
     )
 
     assert decision is consumer_main.Ack.DELETE

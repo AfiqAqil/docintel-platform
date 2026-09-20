@@ -33,13 +33,13 @@ SNIPPET_INSTRUCTION = (
 _DOC_TYPE_LIST = ", ".join(t.value for t in DocType)
 
 
-def _image_content(intro: str, images: list[bytes]) -> list[dict[str, Any]]:
+def _image_content(intro: str, images: list[bytes]) -> list[str | dict[Any, Any]]:
     """Build a LangChain multimodal content list: one text block, then one image block per page.
 
     Images arrive as raw PNG bytes from `load_document`; the base64 source type is what
     LangChain's multimodal content block format expects.
     """
-    content: list[dict[str, Any]] = [{"type": "text", "text": intro}]
+    content: list[str | dict[Any, Any]] = [{"type": "text", "text": intro}]
     for image in images:
         content.append(
             {

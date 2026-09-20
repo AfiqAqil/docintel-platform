@@ -32,10 +32,15 @@ log = consumer_logging.configure()
 
 
 def _boto(service: str) -> Any:
-    kwargs: dict[str, Any] = {"region_name": CFG.aws_region}
-    if CFG.aws_endpoint_url:
-        kwargs["endpoint_url"] = CFG.aws_endpoint_url
-    return boto3.client(service, **kwargs)
+    """One boto3 client.
+
+    endpoint_url is passed as None rather than omitted when it is unset, which is what
+    boto3 already treats as "use the real endpoint". Building a kwargs dict instead would
+    read the same and defeat every one of boto3's per service typed overloads.
+    """
+    return boto3.client(  # type: ignore[call-overload]
+        service, region_name=CFG.aws_region, endpoint_url=CFG.aws_endpoint_url
+    )
 
 
 def _dsn() -> str:
@@ -203,11 +208,16 @@ class Worker:
             except Exception:
                 log.exception("could not fetch the object")
                 if last_attempt:
-                    mark_failed(conn, event.document_id, "The uploaded file could not be read")
+                    mark_failed(
+                        conn,
+                        event.document_id,
+                        "The uploaded file could not be read",
+                        attempt_count=claimed.attempt_count,
+                    )
                     return Ack.DELETE
                 return Ack.RETURN
 
-            return self._run_graph(conn, event, body, receipt, last_attempt)
+            return self._run_graph(conn, event, body, receipt, last_attempt, claimed)
 
     def _run_graph(
         self,
@@ -216,6 +226,7 @@ class Worker:
         body: bytes,
         receipt: str,
         last_attempt: bool,
+        claimed: Claim,
     ) -> Ack:
         def extend_visibility(seconds: int) -> None:
             self.sqs.change_message_visibility(
@@ -232,8 +243,12 @@ class Worker:
         }
 
         with Heartbeat(
-            connect, extend_visibility, event.document_id, CFG.lease_seconds,
+            connect,
+            extend_visibility,
+            event.document_id,
+            CFG.lease_seconds,
             CFG.heartbeat_seconds,
+            claimed.attempt_count,
         ) as beat:
             try:
                 final: dict[str, Any] = {}
@@ -254,12 +269,17 @@ class Worker:
                 if last_attempt:
                     # Out of attempts. Record it, so the document does not sit in
                     # PROCESSING until the reaper notices.
-                    mark_failed(conn, event.document_id, f"{type(exc).__name__}: {exc}")
+                    mark_failed(
+                        conn,
+                        event.document_id,
+                        f"{type(exc).__name__}: {exc}",
+                        attempt_count=claimed.attempt_count,
+                    )
                     return Ack.DELETE
                 return Ack.RETURN
 
         report = final.get("report") or {}
-        return self._record(conn, event, report, final)
+        return self._record(conn, event, report, final, claimed)
 
     def _record(
         self,
@@ -267,6 +287,7 @@ class Worker:
         event: DocumentEvent,
         report: dict[str, Any],
         final: dict[str, Any],
+        claimed: Claim,
     ) -> Ack:
         doc_type = str(report.get("document_type") or "") or None
 
@@ -284,7 +305,9 @@ class Worker:
 
         if report.get("outcome") == "FAILED":
             message = (report.get("error") or {}).get("message", "processing failed")
-            if not mark_failed(conn, event.document_id, message, doc_type):
+            if not mark_failed(
+                conn, event.document_id, message, claimed.attempt_count, doc_type
+            ):
                 log.warning("lease lost before the failure could be recorded, discarding it")
                 return Ack.RETURN
             self._publish_report(event.document_id, report)
@@ -301,7 +324,9 @@ class Worker:
             }
         )
 
-        if not mark_completed(conn, event.document_id, outcome, doc_type, summary):
+        if not mark_completed(
+            conn, event.document_id, outcome, doc_type, summary, claimed.attempt_count
+        ):
             # The lease was taken between the last heartbeat and this write. The new owner
             # will produce its own result, so this one is dropped rather than forced in, and
             # crucially nothing has been written to S3 yet.

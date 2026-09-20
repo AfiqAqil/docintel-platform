@@ -185,7 +185,9 @@ def _downscale(image: Image.Image) -> Image.Image:
 
     scale = CONFIG.max_image_edge_px / longest_edge
     new_size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
-    return image.resize(new_size, Image.LANCZOS)
+    # Image.Resampling.LANCZOS, not the bare Image.LANCZOS alias: the alias is deprecated
+    # and scheduled for removal, so it is a silent breakage waiting on a Pillow upgrade.
+    return image.resize(new_size, Image.Resampling.LANCZOS)
 
 
 def _encode_png(image: Image.Image) -> bytes:
