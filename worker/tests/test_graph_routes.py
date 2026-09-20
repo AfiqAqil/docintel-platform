@@ -597,3 +597,28 @@ def test_the_incident_location_is_masked(graph, fake_llm):
     import json
 
     assert "Windmere" not in json.dumps(result["report"], default=str)
+
+
+def test_the_persisted_trace_covers_the_nodes_after_validation(graph, fake_llm):
+    """Workflow status tracking has to show the run getting past validation.
+
+    mask_pii writes the masked trace while it runs, so that copy stops before mask_pii has
+    recorded itself. Persisting it alone left a report whose trace ended at validate, which
+    reads like a run that stopped halfway through.
+    """
+    schema = SCHEMA_BY_TYPE[DocType.CLAIM_FORM]
+    result = _run(
+        graph, fake_llm, [_classification(DocType.CLAIM_FORM), _field(schema), "Summary."]
+    )
+
+    nodes = [step["node"] for step in result["report"]["trace"]]
+    assert nodes[0] == "load_document"
+    # mask_pii is the last node the report can possibly show: generate_report's own entry is
+    # written once it returns, so nothing it builds can record its own completion.
+    assert nodes[-1] == "mask_pii"
+    # The report's copy is the live trace minus that one final entry, and nothing else.
+    assert nodes == [step["node"] for step in result["trace"]][:-1]
+    assert [step["node"] for step in result["trace"]][-1] == "generate_report"
+    # No detail survives on the entries added after masking, since there is no secrets list
+    # at that point to scrub one with.
+    assert result["report"]["trace"][-1]["detail"] is None
