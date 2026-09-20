@@ -1,0 +1,38 @@
+# secrets and local config
+.env
+.env.*
+!.env.example
+
+# the assignment brief is the company's document, not ours to publish
+docs/*.pdf
+
+# terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+# committed .tfvars carry no secrets. Anything local or machine specific
+# (an office IP allowlist, a personal override) goes in a *.local.tfvars,
+# which is never tracked
+*.local.tfvars
+*.auto.tfvars
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# node
+node_modules/
+dist/
+.vite/
+
+# os
+.DS_Store
