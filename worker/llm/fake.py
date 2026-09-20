@@ -47,7 +47,13 @@ class FakeChatModel(BaseChatModel):
             raise response
         return response
 
-    def _generate(self, messages: list[BaseMessage], **kwargs: Any) -> ChatResult:
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
         response = self._next(messages)
         text = response if isinstance(response, str) else str(response)
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content=text))])

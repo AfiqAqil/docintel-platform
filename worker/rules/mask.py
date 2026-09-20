@@ -152,11 +152,17 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
 
     # Collect the real values first, because they have to be scrubbed from the snippets and
     # the trace as well, not only from the fields they came from.
-    secrets = [
-        (field["value"], name in tail_allowed)
-        for name, field in extracted.items()
-        if name in sensitive and isinstance(field, dict) and field.get("value")
-    ]
+    # Built with an explicit loop rather than a comprehension so the narrowing from
+    # `str | None` to `str` is visible to a reader and to a type checker, instead of hiding
+    # in a truthiness filter that neither can follow.
+    secrets: list[tuple[str, bool]] = []
+    for name, field in extracted.items():
+        if name not in sensitive or not isinstance(field, dict):
+            continue
+        value = field.get("value")
+        if value:
+            secrets.append((value, name in tail_allowed))
+
     # Longest first, so a value that contains a shorter one is masked whole rather than
     # being partly rewritten by the shorter match.
     secrets.sort(key=lambda pair: len(pair[0]), reverse=True)
@@ -176,6 +182,21 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
 
         value = field.get("value")
         snippet = field.get("snippet")
+
+        if name in sensitive and not value:
+            # A sensitive field with no value still has a snippet, and that snippet quotes
+            # the region of the document the value was read from, so it usually contains the
+            # value verbatim. This is not a corner case: it is exactly what snippet
+            # verification produces when it rejects a field, clearing the value and leaving
+            # the evidence behind.
+            #
+            # The snippet is dropped rather than redacted, because with no value there is
+            # nothing to search for. Redacting would silently do nothing while looking like
+            # a control, which is the same mistake the classifier rationale made.
+            masked[name] = FieldValue(
+                value=None, snippet=None, verified=field.get("verified")
+            )
+            continue
 
         if name in sensitive and value:
             masked[name] = FieldValue(
@@ -198,31 +219,53 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
             )
 
     trace: list[StepRecord] = state.get("trace") or []
-    masked_trace = [
-        StepRecord(
-            node=step["node"],
-            status=step["status"],
-            duration_ms=step["duration_ms"],
-            detail=_redact_occurrences(step["detail"], secrets) if step.get("detail") else None,
+    masked_trace: list[StepRecord] = []
+    for step in trace:
+        detail = step.get("detail")
+        masked_trace.append(
+            StepRecord(
+                node=step["node"],
+                status=step["status"],
+                duration_ms=step["duration_ms"],
+                detail=_redact_occurrences(detail, secrets) if detail else None,
+            )
         )
-        for step in trace
-    ]
 
     errors = [_redact_occurrences(e, secrets) for e in (state.get("validation_errors") or [])]
-
-    # The classifier's rationale is free text the model wrote while looking at the
-    # unmasked document, and it is persisted in the report. Without this it is a way around
-    # every other guard here: a note reading "claim form for Jordan Avery, policy POL-4471920"
-    # would carry both values straight through. Scrubbing it is the second of two defences;
-    # the first is that the classification prompt forbids quoting identifiers at all.
-    notes = state.get("classification_notes")
 
     return {
         "extracted": masked,
         "masked_trace": masked_trace,
         "validation_errors": errors,
-        "classification_notes": _redact_occurrences(notes, secrets) if notes else notes,
+        "classification_notes": _safe_notes(state.get("classification_notes"), secrets),
     }
+
+
+def _safe_notes(notes: str | None, secrets: list[tuple[str, bool]]) -> str | None:
+    """The classifier's rationale, but only where it can be made safe deterministically.
+
+    The rationale is free text the model wrote while looking at the unmasked document, and
+    it is persisted, so without a guard it is a way around every other defence here: a note
+    reading "claim form for <name>, policy <number>" carries both values straight through.
+
+    Scrubbing it works only while there is something to scrub with. The redaction set is
+    built from the extracted sensitive fields, so on the routes that extract nothing it is
+    empty and scrubbing becomes a no-op that still looks like a control. That is exactly the
+    unsupported route, where the document was never understood well enough to extract from
+    and the note is therefore the least predictable it ever is.
+
+    So the note is dropped rather than passed through whenever the redaction set is empty.
+    The prompt also tells the model not to quote identifiers, but a prompt is a request, not
+    a boundary, and it cannot be the thing standing between an unclassified document and the
+    report. What remains on that route is the deterministic reason mark_unsupported writes
+    into the observations, which is the part a reviewer actually needs: the type, the
+    confidence, and that it fell below the threshold.
+    """
+    if not notes:
+        return notes
+    if not secrets:
+        return None
+    return _redact_occurrences(notes, secrets)
 
 
 # Kept for the report builder, which needs the same scrubbing applied to the free text it

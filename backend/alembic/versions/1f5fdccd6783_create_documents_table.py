@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = '1f5fdccd6783'
 down_revision: str | None = None
@@ -31,21 +32,46 @@ def upgrade() -> None:
     sa.Column('doc_type', sa.String(length=64), nullable=True),
     sa.Column('current_step', sa.String(length=64), nullable=True),
     sa.Column('lease_expires_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('report_summary', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column(
+        'report_summary', postgresql.JSONB(astext_type=sa.Text()), nullable=True,
+    ),
     sa.Column('error_message', sa.String(length=2048), nullable=True),
-    sa.Column('attempt_count', sa.Integer(), server_default=sa.text('0'), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column(
+        'attempt_count', sa.Integer(), server_default=sa.text('0'), nullable=False,
+    ),
+    sa.Column(
+        'created_at', sa.DateTime(timezone=True),
+        server_default=sa.text('now()'), nullable=False,
+    ),
+    sa.Column(
+        'updated_at', sa.DateTime(timezone=True),
+        server_default=sa.text('now()'), nullable=False,
+    ),
     sa.Column('uploaded_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
-    sa.CheckConstraint("outcome IS NULL OR outcome IN ('COMPLETE','INCOMPLETE','UNSUPPORTED')", name='ck_documents_outcome'),
+    sa.CheckConstraint(
+        "outcome IS NULL OR outcome IN ('COMPLETE','INCOMPLETE','UNSUPPORTED')",
+        name='ck_documents_outcome',
+    ),
     sa.CheckConstraint('size_bytes > 0', name='ck_documents_size_positive'),
-    sa.CheckConstraint("outcome IS NULL OR status = 'COMPLETED'", name='ck_documents_outcome_requires_completed'),
-    sa.CheckConstraint("status IN ('UPLOADING','QUEUED','PROCESSING','COMPLETED','FAILED','EXPIRED')", name='ck_documents_status'),
+    sa.CheckConstraint(
+        "outcome IS NULL OR status = 'COMPLETED'",
+        name='ck_documents_outcome_requires_completed',
+    ),
+    sa.CheckConstraint(
+        "status IN ('UPLOADING','QUEUED','PROCESSING','COMPLETED','FAILED','EXPIRED')",
+        name='ck_documents_status',
+    ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_documents_created_at', 'documents', [sa.literal_column('created_at DESC')], unique=False)
-    op.create_index('ix_documents_status_lease', 'documents', ['status', 'lease_expires_at'], unique=False)
+    op.create_index(
+        'ix_documents_created_at', 'documents',
+        [sa.literal_column('created_at DESC')], unique=False,
+    )
+    op.create_index(
+        'ix_documents_status_lease', 'documents',
+        ['status', 'lease_expires_at'], unique=False,
+    )
     # ### end Alembic commands ###
 
 

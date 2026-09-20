@@ -622,3 +622,87 @@ def test_the_persisted_trace_covers_the_nodes_after_validation(graph, fake_llm):
     # No detail survives on the entries added after masking, since there is no secrets list
     # at that point to scrub one with.
     assert result["report"]["trace"][-1]["detail"] is None
+
+
+def test_a_rejected_sensitive_field_does_not_keep_its_evidence(graph, fake_llm):
+    """Snippet verification clears the value and leaves the snippet, which quotes the value.
+
+    This is not a corner case, it is the normal output of a rejection: the field is emptied
+    precisely because its evidence was wrong, and that evidence still contains the number.
+    Redacting cannot help, because with no value there is nothing to search for, so the
+    snippet is dropped.
+    """
+    from llm.schemas import ExtractedField
+
+    text = "IDENTITY CARD\nName: Milo Thornwood\n"
+    schema = SCHEMA_BY_TYPE[DocType.IDENTITY_DOCUMENT]
+    # The snippet is not in the source text, so verification rejects the field and clears
+    # the value, leaving the identity number sitting in the snippet.
+    extraction = _field(
+        schema,
+        identity_number=ExtractedField(
+            value="A12345678", snippet="ID number: A12345678"
+        ),
+    )
+
+    result = _run(
+        graph,
+        fake_llm,
+        [_classification(DocType.IDENTITY_DOCUMENT), extraction, extraction, "Summary."],
+        text=text,
+    )
+
+    import json
+
+    field = result["report"]["extracted"]["identity_number"]
+    assert field["value"] is None
+    assert field["snippet"] is None
+    assert "A12345678" not in json.dumps(result["report"], default=str)
+
+
+def test_masking_survives_a_sensitive_field_with_no_value(graph, fake_llm):
+    """A model returning a key with a null value must not crash the masking node."""
+    from llm.schemas import ExtractedField
+
+    schema = SCHEMA_BY_TYPE[DocType.CLAIM_FORM]
+    extraction = _field(
+        schema,
+        claimant_name=ExtractedField(value=None, snippet=None),
+        claimant_phone=ExtractedField(value=None, snippet=None),
+    )
+
+    result = _run(
+        graph, fake_llm, [_classification(DocType.CLAIM_FORM), extraction, "Summary."]
+    )
+
+    assert result["report"]["extracted"]["claimant_name"]["value"] is None
+    assert result["report"]["outcome"] == "INCOMPLETE"
+def test_classifier_notes_are_dropped_when_nothing_was_extracted(graph, fake_llm):
+    """The redaction set comes from the extracted fields, so on a route that extracts
+    nothing it is empty and scrubbing is a no-op that still looks like a control.
+
+    That is the unsupported route, where the document was never understood well enough to
+    extract from and the note is at its least predictable. The note is dropped there rather
+    than passed through. The prompt also asks the model not to quote identifiers, but a
+    prompt is a request, not a boundary.
+    """
+    leaky = "This looks like correspondence from Priya Wexford at 42 Windmere Lane."
+
+    result = _run(
+        graph,
+        fake_llm,
+        [
+            Classification(doc_type=DocType.UNKNOWN, confidence=0.9, notes=leaky),
+            "Summary.",
+        ],
+    )
+
+    assert result["report"]["extracted"] == {}
+    assert result["report"]["classification"]["notes"] is None
+
+    import json
+
+    assert "Priya Wexford" not in json.dumps(result["report"], default=str)
+    assert "Windmere" not in json.dumps(result["report"], default=str)
+    # The deterministic reason survives, which is the part that is actually useful.
+    assert any("manual review" in o for o in result["report"]["observations"])

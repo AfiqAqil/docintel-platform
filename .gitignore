@@ -37,12 +37,12 @@ dist/
 # os
 .DS_Store
 
-# local test environments
-.venv/
 
 # sample generator environment
 samples/.venv/
 backend/.venv/
 worker/.venv/
-frontend/node_modules/
-frontend/dist/
+||||||| 3b6aa30
+# sample generator environment
+# agent worktrees and local harness state
+.claude/

@@ -27,12 +27,15 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from graph.state import DocType, FieldValue
+from pydantic import BaseModel
+
+from graph.state import DocType
 from rules import snippets
 
+# The schema module is imported defensively so that this module, which is pure rules, can
+# be imported and unit tested without the LLM layer present at all.
+_SCHEMA_BY_TYPE: dict[DocType, type[BaseModel]] | None
 try:
-    # Written in parallel by another agent. It may not exist yet, and validate() must still
-    # work (and be testable) without it, so the import is guarded rather than assumed.
     from llm.schemas import SCHEMA_BY_TYPE as _SCHEMA_BY_TYPE
 except ImportError:
     _SCHEMA_BY_TYPE = None
@@ -56,7 +59,10 @@ def _required_fields(doc_type: DocType) -> list[str]:
 
 @dataclass(frozen=True)
 class ValidationResult:
-    extracted: dict[str, FieldValue]
+    # dict[str, Any] rather than dict[str, FieldValue], because it is not only FieldValue.
+    # An invoice's line_items is a list of rows, and claiming otherwise would be a signature
+    # that lies about what this function actually takes and returns.
+    extracted: dict[str, Any]
     missing_fields: list[str]
     validation_errors: list[str]
 
@@ -140,7 +146,7 @@ def _is_present(extracted: dict[str, Any], name: str) -> bool:
 
 
 def validate(
-    doc_type: DocType, extracted: dict[str, FieldValue], source_text: str, image_only: bool
+    doc_type: DocType, extracted: dict[str, Any], source_text: str, image_only: bool
 ) -> ValidationResult:
     # Snippet verification runs first. A field it rejects has its value cleared, which the
     # required-field check below then naturally reports as missing (if the field is required)

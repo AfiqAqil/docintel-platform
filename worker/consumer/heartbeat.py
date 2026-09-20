@@ -39,11 +39,15 @@ class Heartbeat:
         document_id: uuid.UUID,
         lease_seconds: int,
         interval_seconds: int,
+        attempt_count: int,
     ) -> None:
         self._conn_factory = conn_factory
         self._extend_visibility = extend_visibility
         self._document_id = document_id
         self._lease_seconds = lease_seconds
+        # The token this worker's own claim returned. A reclaim by anyone else bumps it,
+        # which is how a beat from a superseded worker is refused.
+        self._attempt_count = attempt_count
         self._interval = interval_seconds
         self._stop = threading.Event()
         self._lost = threading.Event()
@@ -82,7 +86,11 @@ class Heartbeat:
                 try:
                     self._extend_visibility(self._lease_seconds)
                     held = extend_lease(
-                        conn, self._document_id, self._lease_seconds, self._current_step
+                        conn,
+                        self._document_id,
+                        self._lease_seconds,
+                        self._attempt_count,
+                        self._current_step,
                     )
                 except Exception:
                     # A failed beat is not fatal on its own: the next one may succeed well
@@ -92,7 +100,7 @@ class Heartbeat:
                     continue
 
                 if not held:
-                    log.warning("lease lost, abandoning the document")
+                    log.warning("this attempt is no longer current, abandoning the document")
                     self._lost.set()
                     return
         finally:
