@@ -92,6 +92,14 @@ class State(TypedDict, total=False):
     s3_key: str
     content_type: str
     file_size: int
+    filename: str
+
+    # The original file's bytes. The consumer fetches them from S3 and puts them here, so
+    # the graph itself makes no AWS call of any kind and can run in tests from a local file.
+    # Fetching is infrastructure work, which is the consumer's layer, not the graph's.
+    # These bytes are never persisted or logged, and there is no checkpointer to write them
+    # to; see architecture section 14 on why the graph re-runs rather than checkpointing.
+    raw_bytes: bytes
 
     # load_document
     text: str

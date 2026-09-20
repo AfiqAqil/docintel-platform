@@ -32,8 +32,11 @@ dev = [
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["consumer", "graph", "llm", "rules"]
+# Auto discovery rather than an explicit list. The explicit list broke `pip install .`
+# whenever a package had not been written yet, and it would need editing again every time
+# one is added, which is exactly the kind of thing that gets forgotten.
+[tool.setuptools.packages.find]
+include = ["consumer*", "graph*", "llm*", "rules*"]
 
 [tool.ruff]
 line-length = 100

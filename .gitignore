@@ -36,3 +36,6 @@ dist/
 
 # os
 .DS_Store
+
+# local test environments
+.venv/

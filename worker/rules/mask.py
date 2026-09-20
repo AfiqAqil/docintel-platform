@@ -38,19 +38,28 @@ MIN_LENGTH_FOR_TAIL = 7
 def mask_value(value: str) -> str:
     """Mask a value while keeping its shape.
 
-    Separators are kept so the result still looks like the kind of thing it is, for example
-    an identity number masks to a recognisably formatted string rather than a blob.
+    Separators are kept, so an identity number masks to a recognisably formatted string
+    rather than an undifferentiated blob, and a reviewer can still tell one document from
+    another.
+
+    The trailing characters are revealed only for values that contain a digit. That
+    restriction matters: a tail is genuinely useful on a reference number, a policy number or
+    a phone number, where the last four characters are how people disambiguate two records.
+    On a name or an email address it is useless for that purpose and leaks part of the value,
+    so those are masked whole. Deciding on the presence of a digit rather than on the field
+    name keeps this a property of the value, so it cannot drift out of step with the schema.
     """
     if not value:
         return value
 
     chars = list(value)
     alnum_positions = [i for i, c in enumerate(chars) if c.isalnum()]
+    identifier_like = any(c.isdigit() for c in value)
 
-    if len(alnum_positions) < MIN_LENGTH_FOR_TAIL:
-        keep_from = len(alnum_positions)
-    else:
+    if identifier_like and len(alnum_positions) >= MIN_LENGTH_FOR_TAIL:
         keep_from = len(alnum_positions) - VISIBLE_TAIL
+    else:
+        keep_from = len(alnum_positions)
 
     for idx in alnum_positions[:keep_from]:
         chars[idx] = MASK_CHAR
@@ -104,8 +113,15 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
     # being partly rewritten by the shorter match.
     secrets.sort(key=len, reverse=True)
 
-    masked: dict[str, FieldValue] = {}
+    masked: dict[str, Any] = {}
     for name, field in extracted.items():
+        # Nested structures, today invoice line items, are a list rather than a FieldValue.
+        # Nothing in them is tagged sensitive, because the tags live on the top level schema
+        # fields, so they pass through untouched.
+        if not isinstance(field, dict) or "value" not in field:
+            masked[name] = field
+            continue
+
         value = field.get("value")
         snippet = field.get("snippet")
 

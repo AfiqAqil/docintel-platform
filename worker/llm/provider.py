@@ -69,10 +69,23 @@ def get_chat_model(**kwargs: Any) -> BaseChatModel:
     provider = CONFIG.llm_provider.lower()
 
     if provider == "bedrock":
+        from botocore.config import Config as BotoConfig
+
+        # Retries reach the Bedrock client through botocore rather than a max_retries
+        # argument. Without this, LLM_MAX_RETRIES silently did nothing in the default mode
+        # and only worked in the OpenAI fallback, which is the kind of gap that is invisible
+        # until a throttled call is not retried in production.
+        #
+        # botocore counts total attempts, not retries, so the configured retry count is
+        # incremented by one to mean the same thing in both providers. Adaptive mode adds
+        # client side rate limiting, which is the right behaviour against a token quota.
         return init_chat_model(
             CONFIG.llm_model_id,
             model_provider="bedrock_converse",
             region_name=CONFIG.aws_region,
+            config=BotoConfig(
+                retries={"max_attempts": CONFIG.llm_max_retries + 1, "mode": "adaptive"}
+            ),
             **kwargs,
         )
 
