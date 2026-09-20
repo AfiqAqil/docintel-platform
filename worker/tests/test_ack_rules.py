@@ -363,3 +363,34 @@ def test_a_stored_report_commits_the_completion(conn, monkeypatch):
     # Read on a second connection, so a transaction left open on the first cannot hide it.
     with psycopg.connect(DSN) as other:
         assert status_of(other, document_id) == "COMPLETED"
+
+
+def test_a_failed_document_whose_report_cannot_be_stored_is_also_retryable(conn, monkeypatch):
+    """The FAILED branch gets the same treatment, and it needs its own test.
+
+    A half committed FAILED row with no report has the same dead end as a COMPLETED one: the
+    redelivery finds it terminal and deletes the message. So the rollback has to apply here
+    too, even though the eventual outcome is a failure either way.
+    """
+    from consumer import main as consumer_main
+    from consumer.claim import claim as take_claim
+
+    document_id = insert(conn, "QUEUED")
+    sqs = FakeSQS([])
+    s3 = FakeS3(fail_put=True)
+    worker = make_worker(monkeypatch, sqs, s3)
+    claimed = take_claim(conn, document_id, 120)
+
+    decision = worker._record(
+        conn,
+        type("E", (), {"document_id": document_id})(),
+        {"outcome": "FAILED", "error": {"message": "the file could not be read"}},
+        {"outcome": "FAILED"},
+        claimed,
+    )
+
+    assert decision is consumer_main.Ack.RETURN
+    assert sqs.deleted == []
+    assert s3.puts == []
+    with psycopg.connect(DSN) as other:
+        assert status_of(other, document_id) == "PROCESSING"

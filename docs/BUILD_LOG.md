@@ -651,7 +651,7 @@ of three attempts was spent doing nothing. The two calls are now the other way r
 
 ### Verification
 
-96 tests, up from 91. Three mutations, each failing exactly its own test and nothing else:
+97 tests, up from 91. Three mutations, each failing exactly its own test and nothing else:
 
 | Mutation | Test that failed |
 |---|---|
@@ -660,7 +660,7 @@ of three attempts was spent doing nothing. The two calls are now the other way r
 | visibility extended before the lease | `assert ['visibility', 'lease'] == ['lease', 'visibility']` |
 
 ```
-96 passed in 3.35s
+97 passed in 3.35s
 Success: no issues found in 35 source files
 All checks passed!
 ```

@@ -386,6 +386,10 @@ class Worker:
         try:
             self._publish_report(document_id, report)
         except Exception:
+            # This rollback is load bearing, not tidiness. The caller holds this connection
+            # inside a `with connect() as conn`, and psycopg commits on a clean exit from
+            # that block. Returning Ack.RETURN is a clean exit, so without rolling back here
+            # the status write would be committed on the way out anyway.
             conn.rollback()
             log.exception("the report could not be stored, returning the message for a retry")
             return False

@@ -84,13 +84,12 @@ class Heartbeat:
         try:
             while not self._stop.wait(self._interval):
                 try:
-                    # The lease is extended first, and only then the visibility timeout.
-                    # Both are pushed to the same number of seconds, but whichever is set
-                    # last lands a few milliseconds further out, and that skew has to fall
-                    # on the visibility timeout. The other way round the message becomes
-                    # visible fractionally before the lease dies, so a worker that returns a
-                    # message finds its own lease still live on the redelivery and burns an
-                    # attempt doing nothing.
+                    # Order matters. These are two clocks, the database's and the SQS
+                    # receipt timer, so the same number of seconds does not land at the same
+                    # instant on both. What is certain is that the call made second lands
+                    # later, and that has to be the visibility timeout: the other way round
+                    # a returned message becomes visible before its own lease has died, so
+                    # the redelivery refuses its own claim and burns an attempt.
                     held = extend_lease(
                         conn,
                         self._document_id,
