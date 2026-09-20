@@ -245,3 +245,353 @@ An external review of the pushed branch raised three, all valid:
    passes `BotoConfig(retries={"max_attempts": llm_max_retries + 1, "mode": "adaptive"})`.
    The increment is because botocore counts total attempts while OpenAI counts retries;
    without it the same setting would mean two different things depending on the provider.
+
+---
+
+## Phase 3: synthetic sample documents
+
+**Built.** `samples/generate.py`, producing eleven documents into `samples/out/`, plus a
+README describing which path each one exercises.
+
+All three formats the assignment names are present, and the formats are not decoration: each
+reaches a different branch of `rules/parse.py`.
+
+| Sample | Format | Path exercised |
+|---|---|---|
+| `claim_form_complete.pdf` | PDF | Happy path, outcome `COMPLETE` |
+| `claim_form_incomplete.pdf` | PDF | Missing required fields, outcome `INCOMPLETE` |
+| `claim_form_bad_dates.pdf` | PDF | The cross field rule, which triggers the retry cycle |
+| `invoice_repair.pdf` | PDF | Invoice extractor and the line item arithmetic |
+| `policy_document.docx` | DOCX | `python-docx`, including table cells |
+| `customer_correspondence.docx` | DOCX | Generic extractor on prose |
+| `identity_card.png` | PNG | Image path, verification skipped, PII masking |
+| `damage_photo.jpg` | JPG | Supporting evidence, a standalone image |
+| `claim_form_scanned.pdf` | PDF, image only | The `pypdfium2` render path |
+| `restaurant_menu.pdf` | PDF | Out of scope, routes to `UNSUPPORTED` |
+| `corrupt_encrypted.pdf` | PDF | Unreadable, terminal failure, `FAILED` |
+
+**Verified.** Every sample fed through the real `rules/parse.py`:
+
+```
+claim_form_bad_dates.pdf         text=  486 images=0 image_only=False
+claim_form_complete.pdf          text=  486 images=0 image_only=False
+claim_form_incomplete.pdf        text=  430 images=0 image_only=False
+claim_form_scanned.pdf           text=    0 images=1 image_only=True
+corrupt_encrypted.pdf            UNREADABLE: PDF is encrypted and could not be opened
+customer_correspondence.docx     text=  580 images=0 image_only=False
+damage_photo.jpg                 text=    0 images=1 image_only=True
+identity_card.png                text=    0 images=1 image_only=True
+invoice_repair.pdf               text=  579 images=0 image_only=False
+policy_document.docx             text=  652 images=0 image_only=False
+restaurant_menu.pdf              text=  393 images=0 image_only=False
+```
+
+And the rule sensitive ones through the real `rules/validate.py`:
+
+```
+complete   -> missing=[] errors=[]
+bad_dates  -> missing=[] errors=['date_of_incident is after date_filed']
+invoice    -> missing=[] errors=[]
+```
+
+Determinism checked by regenerating into a fresh directory and comparing byte for byte. Ten
+of eleven are identical; see the encrypted fixture below for why one is not. The three images
+were also inspected visually, which no automated check covers.
+
+### Decisions worth defending
+
+**The samples are built against the real rules, not to look plausible.** The identity and
+policy numbers match the regexes in `validate.py`, the invoice line items sum exactly to the
+stated total with one amount carrying a thousands separator to exercise the currency parser,
+and the bad dates sample violates the one cross field rule and nothing else, so a failure
+there points at the rule rather than at the document.
+
+**The scanned PDF genuinely has no text layer.** It is built by rendering the claim form to
+an image and embedding that, rather than by a PDF that merely declares itself scanned.
+
+**The DOCX carries a table**, because `python-docx` skips table cells when only paragraphs
+are read. Without a table the sample would not catch that bug.
+
+**`reportlab` is in `samples/requirements.txt` only**, never in `worker/pyproject.toml`. The
+generator is development tooling and is not shipped in any container image.
+
+**The encrypted fixture uses a throwaway password**, generated per run and never returned,
+logged or stored. This is the one sample whose bytes differ between runs. Keeping it
+deterministic would require the password to be reproducible, which is the same as keeping it.
+Raised in review, and the earlier committed constant was the wrong answer even though the
+file was always unreadable to the platform, which tries only the empty password.
+
+### Delegation
+
+| Delegated | Model | What I verified | What I changed |
+|---|---|---|---|
+| The whole generator | Sonnet | Read it in full, re-ran every check myself, fed all 11 through the real parser and validator, regenerated for determinism, looked at the three images | Nothing at the time. The agent found and fixed two issues on its own review pass: a clipped expiry date on the identity card, and two business names that read as plausibly real |
+
+Later corrected after review: the committed encryption password, the stale README, and the
+damage photo described below.
+
+---
+
+## Phase 4: the graph against a real model
+
+**Built.** `worker/run_local.py`, which runs the graph over every sample from files on disk.
+No AWS and no database, which is only possible because the graph makes no AWS call: fetching
+bytes is the consumer's job and here it is a file read.
+
+**Verified.** All eleven documents, `gpt-4o-mini`, 62 seconds.
+
+```
+claim_form_bad_dates.pdf         claim_form                 INCOMPLETE
+claim_form_complete.pdf          claim_form                 COMPLETE
+claim_form_incomplete.pdf        claim_form                 INCOMPLETE
+claim_form_scanned.pdf           claim_form                 COMPLETE
+corrupt_encrypted.pdf            unknown                    FAILED
+customer_correspondence.docx     customer_correspondence    COMPLETE
+damage_photo.jpg                 supporting_evidence        COMPLETE
+identity_card.png                identity_document          COMPLETE
+invoice_repair.pdf               invoice                    COMPLETE
+policy_document.docx             policy_document            COMPLETE
+restaurant_menu.pdf              unknown                    UNSUPPORTED
+```
+
+The retry cycle fired twice without being staged: on `claim_form_bad_dates` as designed, and
+on `policy_document` where the model's first extraction cited a snippet that did not verify.
+Both appear in the persisted trace. The encrypted file failed terminally without a single
+model call.
+
+### Three bugs the unit tests structurally could not find
+
+The tests drive a fake, which proves the wiring. Running a real model on real documents
+proved three things the wiring tests could not:
+
+1. **The generic extractor's `summary` field republished a masked name.** It came back
+   reading "a letter from <name> about a claim" while the name field beside it was correctly
+   masked. Masking a field is useless if another field quotes the value, so every value is
+   now scrubbed, not only the values of fields that are themselves tagged sensitive.
+2. **`incident_location` held the claimant's full home address.** Scrubbing could not catch
+   it, because the address field held a longer string and the match is exact, so the field is
+   now tagged sensitive in its own right. A location tied to a named person is personal data
+   whatever the field is called.
+3. **The persisted trace stopped at `validate`**, which reads like a run that died halfway.
+   `mask_pii` writes the masked copy while running, so that copy cannot contain `mask_pii`.
+
+A scan for every synthetic identifier across all eleven reports now returns nothing.
+
+### Deviation from ARCHITECTURE.md
+
+**The classifier's rationale is dropped, not scrubbed, on the unsupported route.** Raised in
+review. The redaction set is built from the extracted sensitive fields, so on any route that
+extracts nothing it is empty and scrubbing is a no-op that still looks like a control. That is
+exactly the unsupported route, where the document was never understood well enough to extract
+from and the model's free text about it is at its least predictable. The rule is now that
+model free text is persisted only where a deterministic redaction set exists to run over it.
+
+I considered deriving a redaction set independently by scanning the source text for
+identifier-shaped patterns, and did not: a regex PII detector is incomplete by construction,
+and shipping one would claim a guarantee the code cannot make. Dropping the field claims
+nothing.
+
+### The damage photo, and what it taught
+
+`damage_photo.jpg` first came back `UNSUPPORTED`, so no sample exercised the
+`supporting_evidence` type the assignment names. Asked plainly what it saw, the model
+answered that the image was a stylised illustration and could not plausibly be a photograph
+submitted as evidence.
+
+**That was the classifier being right, not wrong**, and it is the reason to check which
+component is at fault before changing either. No amount of prompt tuning fixes a sample that
+does not depict what it claims to.
+
+What makes a photograph supporting evidence is not the pixels, it is the submission around
+them: real evidence reaching an insurer carries a claim reference, a caption and a date,
+because otherwise nobody can tell which claim it belongs to. The sample now carries the same,
+which also gives the generic extractor a reference number and a date to find, so the type
+exercises its extraction path rather than merely reaching it. It now classifies as
+`supporting_evidence` at 0.95 confidence and routes to `extract_generic`.
+
+---
+
+## Phase 5: Backend API and SQS consumer
+
+**Built.** The two services either side of the queue, and the schema they share.
+
+| Part | Files | Owner |
+|---|---|---|
+| The shared schema | `backend/app/models.py`, one Alembic migration | Written first, before either service |
+| Backend API | `backend/app/` | Delegated, then reviewed and mutation tested |
+| SQS consumer | `worker/consumer/` | Written by hand, not delegated |
+
+`worker/consumer/` was kept off the delegation list deliberately. The claim statement, the
+ack rules, the lease heartbeat and the reaper are where this design is either correct or
+quietly loses work.
+
+**Verified.** Real PostgreSQL in Docker, schema created by running the backend's own Alembic
+migration, so the SQL under test runs against the real table rather than a copy that can
+drift from it.
+
+```
+worker:   90 passed
+backend:  14 passed
+ruff:     All checks passed
+mypy:     Success: no issues found in 34 source files
+```
+
+### Decisions worth defending
+
+**The claim is one conditional UPDATE**, so two workers racing cannot both win: the loser's
+`WHERE` no longer matches once the winner commits. Claimable statuses are named explicitly
+rather than inferred from an expired lease, because a finished document's lease is expired
+too, and without the list every `COMPLETED` document would be reclaimable forever on any
+redelivery.
+
+**`attempt_count` is a fencing token.** Checking that the row is `PROCESSING` with a live
+lease says a lease is held; it does not say who holds it. A worker whose lease lapsed, whose
+document was reclaimed, and which then woke up and beat, would push the lease out again and
+pass that check while another worker owned the document. Reproduced end to end against a real
+database: A's write landed on B's row. The claim increments and returns the count, so a
+reclaim invalidates the previous holder's token permanently.
+
+**Acking is the only irreversible thing the consumer does**, since deleting a message
+destroys the only copy of that work. A message is deleted when the document is provably
+finished, `COMPLETED` or `FAILED` and nothing else, or when redelivery provably cannot help:
+an unparseable body, or an object with no row. Anything merely unclear, including a live
+lease held by another worker, is left to time out.
+
+**One heartbeat extends the lease and the visibility timeout together.** Extending them
+separately lets them disagree, and both directions are bugs: a visibility timeout outlasting
+the lease lets a second worker claim a document nobody will redeliver; a lease outlasting the
+visibility timeout hands the message to a worker who cannot claim it and spins to the redrive
+limit.
+
+**The report is published only after the database write succeeds.** Raised in review.
+Publishing first meant a worker that had already lost the lease still overwrote the winner's
+report and only then discovered its own write was refused, leaving a row describing one run
+beside a stored report from another, with no error raised anywhere. The remaining failure, a
+status recorded with no report, is visible: the report route returns 404. A missing answer
+everyone can see beats a wrong one nobody can.
+
+**The reaper's two sweeps are asymmetric on purpose.** A row stuck in `PROCESSING` is failed
+only once its lease is expired by more than the whole redrive window, so a worker with a
+briefly late heartbeat is reclaimed by redelivery rather than declared dead. An abandoned
+upload gets `EXPIRED`, not `FAILED`, because it is a guess a later event can disprove.
+
+**The object key carries no filename.** S3 URL encodes keys in notifications and encodes
+spaces as `+`, so a filename with a space would arrive as a key that does not exist.
+
+**The health check touches nothing.** It is a container health check; one that fails when the
+database blips would have ECS killing tasks that are fine.
+
+### Mutation testing
+
+A passing test proves nothing until it has been watched to fail. Each of these breaks one
+rule and fails exactly the test written to catch it:
+
+| Mutation | Test that caught it |
+|---|---|
+| Expired-lease clause no longer scoped to `PROCESSING` | `test_finished_documents_are_never_reclaimed` |
+| The fencing token removed from all three statements | `test_a_superseded_worker_cannot_write_after_the_document_is_reclaimed` |
+| Completion write no longer checks the lease | `test_a_worker_that_lost_its_lease_cannot_write_a_result` |
+| Reaper loses its grace period | `test_reaper_leaves_a_recently_expired_lease_alone` |
+| Ack anything not claimable, not just terminal | `test_a_document_held_by_another_worker_returns_the_message` |
+| Mark failed on every fetch failure, not only the last | `test_a_fetch_failure_returns_the_message_when_attempts_remain` |
+| Publish the report before the ownership check | `test_a_worker_that_lost_its_lease_writes_nothing_at_all` |
+| Drop the `status='UPLOADING'` condition | `test_upload_complete_does_not_move_processing_backwards` |
+| Drop the HeadObject check | `test_upload_complete_without_object_is_409...` |
+| Put the filename back into the S3 key | `test_presigned_key_is_uploads_prefix_document_id_with_no_filename` |
+
+### Delegation
+
+| Delegated | Model | What I verified | What I changed |
+|---|---|---|---|
+| The whole Backend API: routers, config, S3 presigning, schemas, tests | Sonnet | Read every file, ran its tests myself, mutation tested its three guards | Nothing in its files. It correctly flagged a `StrEnum` lint issue in my own `models.py` and correctly refused to touch it |
+
+Split into one agent rather than two: the routers, schemas and tests are one overlapping file
+set, and two agents would have been editing the same files.
+
+---
+
+## Phase 6: frontend
+
+**Built.** React and Vite behind `nginx-unprivileged` on 8080, plus the LocalStack init
+script the next phase needs.
+
+**Verified.**
+
+```
+$ npm run build            # tsc --noEmit && vite build
+  38 modules transformed, built in 214ms
+
+$ docker run ... nginxinc/nginx-unprivileged:1.27-alpine nginx -t
+  20-envsubst-on-templates.sh: Running envsubst on .../default.conf.template
+  nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+Rendered with the AWS values through the image's real entrypoint, not a hand rolled
+substitute.
+
+### Decisions worth defending
+
+**The six polling rules**, all in `src/usePolling.ts`, because section 11 chooses polling over
+SSE and the choice is only defensible if the rules are exact: 3 seconds while anything is in
+flight, 15 once nothing is, refetch on window focus, a toast only on the transition into a
+terminal state rather than on every poll that still sees one, no toast on the first poll, and
+`EXPIRED` treated as settled. The last one matters: it is not terminal in the backend, since
+a late S3 event can still claim the row, but an abandoned upload would otherwise keep the
+fast poll running forever.
+
+**A failed poll is not retried specially.** The next tick is the retry and it returns the
+full current state, so there is nothing to reconcile and no backoff to tune. That is the
+whole reason polling was chosen: the failure mode is a delayed update, never a wrong one.
+
+**Each poll takes a ticket.** Raised in review. A focus event could start a poll while one
+was in flight; both then updated state, so an older response could overwrite newer statuses,
+and both reached the `setTimeout`, so the single loop became two and every subsequent focus
+event doubled it again. Only the holder of the newest ticket may touch state or schedule the
+next tick.
+
+**The nginx upstream is held in a variable.** nginx resolves a plain hostname once and caches
+it for the life of the process, and ECS task addresses change on every deploy. A variable in
+`proxy_pass` is what forces re-resolution; without it the `resolver` directive has no effect
+on that upstream at all. `proxy_next_upstream` covers the ten seconds of staleness that
+remain during a rolling deploy.
+
+**The resolver address is an environment variable**, because it is `169.254.169.253` on AWS
+and `127.0.0.11` under compose. The config ships as a template and the image's own entrypoint
+runs `envsubst` over it, so there is no custom entrypoint script.
+
+**`/healthz` is served by nginx itself**, not proxied. The frontend is still serving the
+application correctly when the backend is down, and a target group that failed then would
+take out a service that is working.
+
+### The LocalStack pin
+
+`4.14`, the last release before `2026.03.0` merged the community and pro images into one that
+refuses to start without a `LOCALSTACK_AUTH_TOKEN`. Verified against the Docker Hub tag API
+and then by starting it: no token, no account, no signup.
+
+The S3 to SQS notification was verified by hand rather than assumed, because that event is
+the actual trigger in this design and a local stack that faked it would prove nothing:
+
+```
+after writing reports/aaa.json      -> queue depth 0
+after writing thumbnails/x.png      -> queue depth 0
+after writing uploads/1111...1111   -> queue depth 1
+```
+
+That prefix filter is what stops the worker triggering on its own report writes into the same
+bucket, which would otherwise loop forever.
+
+**One bug found in my own work:** the init script created the queue in `us-east-1` while the
+bucket and every client sat in `ap-southeast-1`, because `awslocal` defaults to `us-east-1`
+inside the container and SQS queues are region scoped. Nothing could find the queue.
+
+### Delegation
+
+| Delegated | Model | What I verified | What I changed |
+|---|---|---|---|
+| React pages, polling hook, toasts, report view | Sonnet | Read the polling hook line by line against section 11, read the S3 field ordering | The polling ticket, after review found the focus race |
+| `package.json`, Vite and TypeScript config, `index.html`, the nginx template | Sonnet | Re-ran the build and `nginx -t` myself, read the rendered config | Nothing |
+
+Both agents' output built together on the first attempt. The API contract they coded against
+was generated from the running backend and committed first, so neither had to guess at the
+other side's shape.

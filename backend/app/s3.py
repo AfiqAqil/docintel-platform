@@ -15,10 +15,18 @@ from botocore.exceptions import ClientError
 from app.config import settings
 
 
-def _client() -> Any:
-    return boto3.client(
-        "s3", region_name=settings.aws_region, endpoint_url=settings.aws_endpoint_url
-    )
+def _client(for_browser: bool = False) -> Any:
+    """An S3 client. `for_browser` builds one whose signed URLs the browser can reach.
+
+    The presigned POST is signed for a specific host, so the host has to be the one the
+    browser will actually connect to. Locally that differs from the one this service uses,
+    and signing for the wrong one produces a URL that either fails to resolve or fails its
+    signature check. On AWS the two are the same and this collapses to a single client.
+    """
+    endpoint = settings.aws_endpoint_url
+    if for_browser and settings.s3_public_endpoint_url:
+        endpoint = settings.s3_public_endpoint_url
+    return boto3.client("s3", region_name=settings.aws_region, endpoint_url=endpoint)
 
 
 def _safe_filename(filename: str) -> str:
@@ -37,7 +45,7 @@ def presign_upload(key: str, content_type: str, filename: str) -> dict[str, Any]
     `filename` column.
     """
     disposition = f'attachment; filename="{_safe_filename(filename)}"'
-    client = _client()
+    client = _client(for_browser=True)
     return client.generate_presigned_post(
         Bucket=settings.s3_bucket,
         Key=key,

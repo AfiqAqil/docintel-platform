@@ -28,6 +28,12 @@ class Settings:
     aws_region: str = os.environ.get("AWS_REGION", "ap-southeast-1")
     # Set locally to point boto3 at LocalStack. Unset on AWS, where the real endpoints apply.
     aws_endpoint_url: str | None = os.environ.get("AWS_ENDPOINT_URL")
+    # The endpoint the *browser* must use for the presigned upload, which is not always the
+    # one this service uses. Under compose the API reaches LocalStack at http://localstack:4566
+    # on the internal network, while the browser can only reach it at http://localhost:4566,
+    # and a presigned URL naming a host the browser cannot resolve is useless. Unset on AWS,
+    # where both sides address the real S3 endpoint identically.
+    s3_public_endpoint_url: str | None = os.environ.get("S3_PUBLIC_ENDPOINT_URL")
 
     s3_bucket: str = os.environ.get("S3_BUCKET", "docintel-local")
     upload_prefix: str = os.environ.get("UPLOAD_PREFIX", "uploads/")

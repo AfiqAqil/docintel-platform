@@ -1,0 +1,123 @@
+# The whole platform, locally, with the AWS parts emulated.
+#
+# The point of this file is to prove the event driven path before anything is deployed: a
+# browser uploads straight to object storage, storage emits an event, the queue delivers it,
+# and the worker produces a report. Those are the moving parts that are hard to reason about
+# on AWS and easy to watch here.
+#
+#   docker compose up --build
+#   open http://localhost:8080
+
+name: docintel
+
+services:
+  # LocalStack pinned to 4.14, the last release before 2026.03.0 merged the community and pro
+  # images into one that refuses to start without an auth token. This one needs no account.
+  localstack:
+    image: localstack/localstack:4.14
+    environment:
+      SERVICES: s3,sqs
+      AWS_DEFAULT_REGION: ap-southeast-1
+      # LocalStack accepts any credentials; these are not secrets and exist only so the SDKs
+      # find something to sign with.
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    ports:
+      - "4566:4566"
+    volumes:
+      # Runs once when LocalStack is ready. Builds the same shapes Terraform builds on AWS:
+      # the bucket, the queue, its dead letter queue, and the notification filtered to the
+      # uploads prefix.
+      - ./local/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+    healthcheck:
+      # Waits for the init hook, not just for LocalStack itself. Without the queue and the
+      # notification in place, the services below would start against an empty account.
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name docintel-processing || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: docintel
+      POSTGRES_PASSWORD: docintel
+      POSTGRES_DB: docintel
+    ports:
+      # Exposed so the integration tests can reach the same database the stack uses.
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docintel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://docintel:docintel@postgres:5432/docintel
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: ap-southeast-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      S3_BUCKET: docintel-local
+      # The browser posts the file directly to storage, so the presigned URL it receives has
+      # to be one the browser can reach. Inside the compose network that host is
+      # "localstack"; from the browser it is localhost, which is what this overrides.
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:4566
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    ports:
+      # Exposed for direct API inspection. On AWS the API has no public path at all: only
+      # the frontend can reach it, over private DNS.
+      - "8000:8000"
+
+  worker:
+    build:
+      context: ./worker
+    environment:
+      DATABASE_DSN: host=postgres port=5432 dbname=docintel user=docintel password=docintel
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: ap-southeast-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      S3_BUCKET: docintel-local
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/docintel-processing
+      # Matches the redrive policy the init script sets. The consumer has to recognise its
+      # own last delivery attempt to record a failure rather than leaving a row in
+      # PROCESSING, and it can only do that if the two numbers agree.
+      MAX_RECEIVE_COUNT: "3"
+      LEASE_SECONDS: "120"
+      HEARTBEAT_SECONDS: "30"
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL_ID: ${LLM_MODEL_ID:-gpt-4o-mini}
+      # Read from the shell, never from a file in the image. Absent in the Bedrock mode.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      # Not a hard dependency in production, where ECS gives no ordering guarantee and the
+      # worker retries until the schema exists. Here it just makes the logs readable.
+      api:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      # Docker's embedded DNS. On AWS this is the VPC resolver at 169.254.169.253, which is
+      # why the address is a variable rather than a literal in the nginx template.
+      DNS_RESOLVER: 127.0.0.11
+      API_UPSTREAM: api:8000
+    depends_on:
+      - api
+    ports:
+      # 8080 because nginx-unprivileged cannot bind a privileged port as a non root user.
+      - "8080:8080"
