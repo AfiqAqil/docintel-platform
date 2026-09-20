@@ -53,6 +53,16 @@ export function usePolling(onTransition: (transition: StatusTransition) => void)
   const isFirstPoll = useRef(true);
   const timerRef = useRef<number | undefined>(undefined);
   const activeRef = useRef(true);
+  // Every poll takes a ticket, and only the holder of the newest one is allowed to touch
+  // state or schedule the next tick.
+  //
+  // Without this, a focus event starting a poll while one is already in flight produced two
+  // problems, and the second is the serious one. An older response could land after a newer
+  // one and overwrite current statuses with stale ones. Worse, both polls reach the
+  // setTimeout at the end, so the single loop becomes two, and every subsequent focus event
+  // doubles it again. Clearing the timer at the top of poll() does not help, because a poll
+  // that is awaiting its fetch has no timer to clear yet.
+  const latestRequest = useRef(0);
   // Kept in a ref so the poll loop (defined once) always calls the latest
   // callback without needing to be recreated, which would otherwise restart
   // the schedule on every render.
@@ -65,9 +75,18 @@ export function usePolling(onTransition: (transition: StatusTransition) => void)
       timerRef.current = undefined;
     }
 
+    const requestId = ++latestRequest.current;
+    const isStale = (): boolean => requestId !== latestRequest.current;
+
     let nextDelay = FAST_INTERVAL_MS;
     try {
       const { items } = await listDocuments();
+
+      // A newer poll started while this one was in flight. Its answer is more current than
+      // ours, so this response is dropped entirely: no state, no toasts, no timer.
+      if (isStale()) {
+        return;
+      }
 
       for (const doc of items) {
         const prev = prevStatuses.current.get(doc.id);
@@ -90,12 +109,17 @@ export function usePolling(onTransition: (transition: StatusTransition) => void)
     } catch (e) {
       // Nothing lost: the next poll returns the full current state, so a
       // failed request just waits for the tick already scheduled below.
+      if (isStale()) {
+        return;
+      }
       if (activeRef.current) {
         setError(e instanceof Error ? e.message : "Failed to load documents.");
       }
     }
 
-    if (activeRef.current) {
+    // Only the newest poll schedules the next tick, so there is always exactly one loop
+    // however many focus events arrive while a request is in flight.
+    if (activeRef.current && !isStale()) {
       timerRef.current = window.setTimeout(() => void poll(), nextDelay);
     }
   }, []);
