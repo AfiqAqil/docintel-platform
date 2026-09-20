@@ -31,7 +31,7 @@ class Base(DeclarativeBase):
     pass
 
 
-class Status(str, enum.Enum):
+class Status(enum.StrEnum):
     """Where a document is. Answers "where is it", not "how did it go"."""
 
     UPLOADING = "UPLOADING"
@@ -45,7 +45,7 @@ class Status(str, enum.Enum):
     EXPIRED = "EXPIRED"
 
 
-class Outcome(str, enum.Enum):
+class Outcome(enum.StrEnum):
     """How processing went, for a document that reached COMPLETED."""
 
     COMPLETE = "COMPLETE"
