@@ -136,7 +136,12 @@ class ClaimFormExtraction(BaseModel):
         description="A description of what happened, in the claimant's or form's own words.",
     )
     incident_location: ExtractedField = Field(
-        default_factory=ExtractedField, description="Where the incident took place."
+        default_factory=ExtractedField,
+        description="Where the incident took place.",
+        # A location tied to a named person is personal data, and on a home claim it is
+        # usually the claimant's own address. Masking the address field while leaving this
+        # one in the clear would have published the same value under a different key.
+        json_schema_extra={"pii": True},
     )
     claimed_amount: ExtractedField = Field(
         default_factory=ExtractedField, description="The monetary amount being claimed."

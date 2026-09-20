@@ -533,3 +533,67 @@ def test_an_address_is_masked_whole_in_the_report(graph, fake_llm):
     assert "reet" not in extracted["claimant_address"]["value"]
     # The phone keeps its tail, because that is what tells two numbers apart.
     assert extracted["claimant_phone"]["value"].endswith("4567")
+
+
+def test_a_free_text_field_cannot_republish_a_masked_value(graph, fake_llm):
+    """Masking the field a value came from is not enough on its own.
+
+    A summary reading "a letter from <name> about their claim" carries the name just as
+    plainly as the name field does. Found in a real run against a model, where the generic
+    extractor's summary quoted a claimant whose name field was correctly masked.
+    """
+    from llm.schemas import ExtractedField
+
+    text = (
+        "Dear Claims Team\nI am writing about my claim.\nRegards\nPriya Wexford\n"
+        "Reference: CLM-2026-00931\n"
+    )
+    schema = SCHEMA_BY_TYPE[DocType.CUSTOMER_CORRESPONDENCE]
+    extraction = _field(
+        schema,
+        related_party_name=ExtractedField(value="Priya Wexford", snippet="Priya Wexford"),
+        summary=ExtractedField(
+            value="This document is a letter from Priya Wexford about a claim.",
+            snippet="I am writing about my claim.",
+        ),
+    )
+
+    result = _run(
+        graph,
+        fake_llm,
+        [_classification(DocType.CUSTOMER_CORRESPONDENCE), extraction, "Summary."],
+        text=text,
+    )
+
+    import json
+
+    assert "Priya Wexford" not in json.dumps(result["report"], default=str)
+
+
+def test_the_incident_location_is_masked(graph, fake_llm):
+    """A location tied to a named person is personal data.
+
+    On a home claim it is usually the claimant's own address, so leaving it untagged
+    published the same value under a different key from the one that was masked.
+    """
+    from llm.schemas import ExtractedField
+    from rules.mask import pii_field_names
+
+    assert "incident_location" in pii_field_names(SCHEMA_BY_TYPE[DocType.CLAIM_FORM])
+
+    text = "CLAIM FORM\nIncident Location: 42 Windmere Lane, Rivermouth\n"
+    extraction = _field(
+        SCHEMA_BY_TYPE[DocType.CLAIM_FORM],
+        incident_location=ExtractedField(
+            value="42 Windmere Lane, Rivermouth",
+            snippet="Incident Location: 42 Windmere Lane, Rivermouth",
+        ),
+    )
+
+    result = _run(
+        graph, fake_llm, [_classification(DocType.CLAIM_FORM), extraction, "Summary."], text=text
+    )
+
+    import json
+
+    assert "Windmere" not in json.dumps(result["report"], default=str)

@@ -112,6 +112,35 @@ def _redact_occurrences(text: str, secrets: list[tuple[str, bool]]) -> str:
     return text
 
 
+
+def _mask_rows(rows: list[Any], secrets: list[tuple[str, bool]]) -> list[Any]:
+    """Scrub sensitive values out of a nested row structure, such as invoice line items.
+
+    No cell inside a row is itself tagged sensitive, because the tags live on the top level
+    schema fields. A line item description can still quote a name, so the rows are scrubbed
+    rather than passed through on the assumption that nested means safe.
+    """
+    masked_rows: list[Any] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            masked_rows.append(row)
+            continue
+        masked_row: dict[str, Any] = {}
+        for cell_name, cell in row.items():
+            if not isinstance(cell, dict) or "value" not in cell:
+                masked_row[cell_name] = cell
+                continue
+            value = cell.get("value")
+            snippet = cell.get("snippet")
+            masked_row[cell_name] = FieldValue(
+                value=_redact_occurrences(value, secrets) if value else value,
+                snippet=_redact_occurrences(snippet, secrets) if snippet else snippet,
+                verified=cell.get("verified"),
+            )
+        masked_rows.append(masked_row)
+    return masked_rows
+
+
 def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
     """Return the state changes that mask every sensitive value.
 
@@ -137,6 +166,10 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
         # Nested structures, today invoice line items, are a list rather than a FieldValue.
         # Nothing in them is tagged sensitive, because the tags live on the top level schema
         # fields, so they pass through untouched.
+        if isinstance(field, list):
+            masked[name] = _mask_rows(field, secrets)
+            continue
+
         if not isinstance(field, dict) or "value" not in field:
             masked[name] = field
             continue
@@ -152,10 +185,14 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
                 verified=field.get("verified"),
             )
         else:
-            # Not a sensitive field, but its snippet may still quote a sensitive value from
-            # a neighbouring line, so the snippet is scrubbed either way.
+            # Not a sensitive field, but both its value and its snippet can still contain a
+            # sensitive value. A free text field is the usual way this happens: a document
+            # summary that reads "a letter from <name> about their claim" carries the name
+            # just as plainly as the name field does, and masking only the name field would
+            # publish it anyway under a different key. Scrubbing every value, not only the
+            # ones on sensitive fields, is what makes that impossible rather than unlikely.
             masked[name] = FieldValue(
-                value=value,
+                value=_redact_occurrences(value, secrets) if value else value,
                 snippet=_redact_occurrences(snippet, secrets) if snippet else snippet,
                 verified=field.get("verified"),
             )
