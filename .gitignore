@@ -39,3 +39,6 @@ dist/
 
 # local test environments
 .venv/
+
+# agent worktrees and local harness state
+.claude/
