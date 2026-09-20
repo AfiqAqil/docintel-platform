@@ -33,30 +33,30 @@ MASK_CHAR = "•"
 VISIBLE_TAIL = 4
 # Below this length nothing is revealed: showing 4 of 5 characters is not masking.
 MIN_LENGTH_FOR_TAIL = 7
+# The json_schema_extra pii value that opts a field into keeping a visible tail.
+TAIL_MODE = "tail"
 
 
-def mask_value(value: str) -> str:
-    """Mask a value while keeping its shape.
+def mask_value(value: str, reveal_tail: bool = False) -> str:
+    """Mask a value, optionally keeping its trailing characters visible.
 
-    Separators are kept, so an identity number masks to a recognisably formatted string
-    rather than an undifferentiated blob, and a reviewer can still tell one document from
-    another.
+    Separators are always kept, so a masked value still looks like the kind of thing it is
+    rather than an undifferentiated blob.
 
-    The trailing characters are revealed only for values that contain a digit. That
-    restriction matters: a tail is genuinely useful on a reference number, a policy number or
-    a phone number, where the last four characters are how people disambiguate two records.
-    On a name or an email address it is useless for that purpose and leaks part of the value,
-    so those are masked whole. Deciding on the presence of a digit rather than on the field
-    name keeps this a property of the value, so it cannot drift out of step with the schema.
+    `reveal_tail` is off by default and is decided by the schema, not by inspecting the
+    value. An earlier version guessed from the value itself, revealing a tail whenever it
+    contained a digit, which meant an address like "12 Main Street" kept its last four
+    characters. Any content based guess has that failure mode, because "contains a digit" is
+    a property shared by identifiers and by ordinary text that merely has a number in it.
+    Only a field the schema explicitly marks as an identifier gets a tail.
     """
     if not value:
         return value
 
     chars = list(value)
     alnum_positions = [i for i, c in enumerate(chars) if c.isalnum()]
-    identifier_like = any(c.isdigit() for c in value)
 
-    if identifier_like and len(alnum_positions) >= MIN_LENGTH_FOR_TAIL:
+    if reveal_tail and len(alnum_positions) >= MIN_LENGTH_FOR_TAIL:
         keep_from = len(alnum_positions) - VISIBLE_TAIL
     else:
         keep_from = len(alnum_positions)
@@ -70,26 +70,45 @@ def mask_value(value: str) -> str:
 def pii_field_names(schema: type[Any] | None) -> set[str]:
     """The fields a Pydantic schema tags as sensitive.
 
-    Reads `json_schema_extra={"pii": True}` from each model field. Returns an empty set for
-    a schema that tags nothing, and for None, so an untyped or unsupported document is not a
-    special case at the call site.
+    Reads `json_schema_extra={"pii": ...}` off each model field. Any truthy value means
+    sensitive. Returns an empty set for a schema that tags nothing and for None, so an
+    unsupported or unclassified document is not a special case at the call site.
     """
-    if schema is None or not hasattr(schema, "model_fields"):
-        return set()
+    return set(_pii_modes(schema))
 
-    names = set()
+
+def pii_tail_fields(schema: type[Any] | None) -> set[str]:
+    """The sensitive fields that may keep a visible tail.
+
+    A field opts in with `{"pii": "tail"}` rather than `{"pii": True}`. The tail exists so a
+    reviewer can tell two policy numbers or two phone numbers apart, which is only useful for
+    identifiers. It is opt in rather than opt out so that a newly added sensitive field is
+    fully masked by default: forgetting to add a tag should never be what leaks a value.
+    """
+    return {name for name, mode in _pii_modes(schema).items() if mode == TAIL_MODE}
+
+
+def _pii_modes(schema: type[Any] | None) -> dict[str, Any]:
+    if schema is None or not hasattr(schema, "model_fields"):
+        return {}
+
+    modes: dict[str, Any] = {}
     for name, field in schema.model_fields.items():
         extra = getattr(field, "json_schema_extra", None)
-        if isinstance(extra, dict) and extra.get("pii") is True:
-            names.add(name)
-    return names
+        if isinstance(extra, dict) and extra.get("pii"):
+            modes[name] = extra["pii"]
+    return modes
 
 
-def _redact_occurrences(text: str, secrets: list[str]) -> str:
-    """Replace every occurrence of each sensitive value in free text with its mask."""
-    for secret in secrets:
+def _redact_occurrences(text: str, secrets: list[tuple[str, bool]]) -> str:
+    """Replace every occurrence of each sensitive value in free text with its mask.
+
+    Each secret carries its own tail decision, so a value is masked the same way wherever it
+    appears: in its own field, quoted inside a snippet, or mentioned in a trace detail.
+    """
+    for secret, reveal_tail in secrets:
         if secret and secret in text:
-            text = text.replace(secret, mask_value(secret))
+            text = text.replace(secret, mask_value(secret, reveal_tail=reveal_tail))
     return text
 
 
@@ -100,18 +119,18 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
     """
     extracted: dict[str, FieldValue] = state.get("extracted") or {}
     sensitive = pii_field_names(schema)
+    tail_allowed = pii_tail_fields(schema)
 
     # Collect the real values first, because they have to be scrubbed from the snippets and
     # the trace as well, not only from the fields they came from.
     secrets = [
-        field["value"]
+        (field["value"], name in tail_allowed)
         for name, field in extracted.items()
-        if name in sensitive and field.get("value")
+        if name in sensitive and isinstance(field, dict) and field.get("value")
     ]
-    secrets = [s for s in secrets if s]
     # Longest first, so a value that contains a shorter one is masked whole rather than
     # being partly rewritten by the shorter match.
-    secrets.sort(key=len, reverse=True)
+    secrets.sort(key=lambda pair: len(pair[0]), reverse=True)
 
     masked: dict[str, Any] = {}
     for name, field in extracted.items():
@@ -127,7 +146,7 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
 
         if name in sensitive and value:
             masked[name] = FieldValue(
-                value=mask_value(value),
+                value=mask_value(value, reveal_tail=name in tail_allowed),
                 # The snippet quotes the source, so it usually contains the value verbatim.
                 snippet=_redact_occurrences(snippet, secrets) if snippet else snippet,
                 verified=field.get("verified"),
@@ -154,12 +173,24 @@ def mask_state(state: State, schema: type[Any] | None) -> dict[str, Any]:
 
     errors = [_redact_occurrences(e, secrets) for e in (state.get("validation_errors") or [])]
 
-    return {"extracted": masked, "masked_trace": masked_trace, "validation_errors": errors}
+    # The classifier's rationale is free text the model wrote while looking at the
+    # unmasked document, and it is persisted in the report. Without this it is a way around
+    # every other guard here: a note reading "claim form for Jordan Avery, policy POL-4471920"
+    # would carry both values straight through. Scrubbing it is the second of two defences;
+    # the first is that the classification prompt forbids quoting identifiers at all.
+    notes = state.get("classification_notes")
+
+    return {
+        "extracted": masked,
+        "masked_trace": masked_trace,
+        "validation_errors": errors,
+        "classification_notes": _redact_occurrences(notes, secrets) if notes else notes,
+    }
 
 
 # Kept for the report builder, which needs the same scrubbing applied to the free text it
 # assembles from observations.
-def redact(text: str, secrets: list[str]) -> str:
+def redact(text: str, secrets: list[tuple[str, bool]]) -> str:
     return _redact_occurrences(text, secrets)
 
 

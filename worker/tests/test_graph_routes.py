@@ -443,3 +443,93 @@ def test_report_carries_every_key_the_assignment_asks_for(graph, fake_llm):
         "trace",
     ):
         assert key in report, f"report is missing {key}"
+
+
+# ---------------------------------------------------------------------------------------
+# Regressions. Each of these reproduces a defect found in review.
+# ---------------------------------------------------------------------------------------
+
+
+def test_classification_notes_cannot_carry_pii_into_the_report(graph, fake_llm):
+    """The classifier's rationale is free text written from the unmasked document.
+
+    It is persisted in the report, so without scrubbing it is a way around every other
+    guard: a note naming the claimant carries that name straight through while the field it
+    came from is properly masked.
+    """
+    from llm.schemas import ExtractedField
+
+    id_text = "IDENTITY CARD\nName: Jordan Avery\nID number: A12345678\n"
+    leaky_note = "Identity card belonging to Jordan Avery, number A12345678."
+
+    schema = SCHEMA_BY_TYPE[DocType.IDENTITY_DOCUMENT]
+    extraction = _field(
+        schema,
+        full_name=ExtractedField(value="Jordan Avery", snippet="Name: Jordan Avery"),
+        identity_number=ExtractedField(value="A12345678", snippet="ID number: A12345678"),
+    )
+
+    result = _run(
+        graph,
+        fake_llm,
+        [
+            Classification(
+                doc_type=DocType.IDENTITY_DOCUMENT, confidence=0.95, notes=leaky_note
+            ),
+            extraction,
+            "Summary.",
+        ],
+        text=id_text,
+    )
+
+    import json
+
+    serialised = json.dumps(result["report"], default=str)
+    assert "Jordan Avery" not in serialised
+    assert "A12345678" not in serialised
+
+
+def test_only_identifier_fields_keep_a_visible_tail():
+    """A tail is for telling two reference numbers apart, and nothing else.
+
+    Deciding from the value rather than the schema meant any text containing a digit kept
+    its last four characters, so an address like "12 Main Street" was partly revealed.
+    """
+    from llm.schemas import ClaimFormExtraction, IdentityExtraction
+    from rules.mask import mask_value, pii_tail_fields
+
+    assert pii_tail_fields(IdentityExtraction) == {"identity_number"}
+    assert pii_tail_fields(ClaimFormExtraction) == {"claimant_phone"}
+
+    # An address is sensitive but is not an identifier, so it is masked whole even though it
+    # contains digits.
+    assert mask_value("12 Main Street") == "•• •••• ••••••"
+    # An identity number is exactly the case the tail was designed for.
+    assert mask_value("A12345678", reveal_tail=True).endswith("5678")
+
+
+def test_an_address_is_masked_whole_in_the_report(graph, fake_llm):
+    """End to end version of the rule above, through the real schema tags."""
+    from llm.schemas import ExtractedField
+
+    text = (
+        "CLAIM FORM\nPolicy number: POL-4471920\nClaimant: Jordan Avery\n"
+        "Address: 12 Main Street\nPhone: +65 9123 4567\n"
+    )
+    schema = SCHEMA_BY_TYPE[DocType.CLAIM_FORM]
+    extraction = _field(
+        schema,
+        claimant_address=ExtractedField(value="12 Main Street", snippet="Address: 12 Main Street"),
+        claimant_phone=ExtractedField(value="+65 9123 4567", snippet="Phone: +65 9123 4567"),
+    )
+
+    result = _run(
+        graph, fake_llm, [_classification(DocType.CLAIM_FORM), extraction, "Summary."], text=text
+    )
+
+    extracted = result["report"]["extracted"]
+    # Fully masked: no run of the original characters survives anywhere.
+    assert "Main" not in extracted["claimant_address"]["value"]
+    assert "reet" not in extracted["claimant_address"]["value"]
+    # The phone keeps its tail, because that is what tells two numbers apart.
+    assert extracted["claimant_phone"]["value"].endswith("4567")
