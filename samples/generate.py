@@ -9,16 +9,16 @@ The field values are chosen to satisfy the deterministic rules in worker/rules/v
 a sample is meant to pass, and to violate exactly one rule where a sample is meant to fail. The
 docstring in each generator function below names which rule and which file.
 
-No randomness is used anywhere, so re-running this script produces byte-identical output for
-every file, including corrupt_encrypted.pdf. Its encryption password is a fixed local constant
-below, deliberately never printed or written to README.md; that is a publication rule, not a
-reproducibility one.
+Randomness is used only for that password, so re-running this script produces byte-identical output for
+every file except corrupt_encrypted.pdf, which is encrypted with a throwaway password that
+is generated per run and never stored, so its bytes differ each time by design.
 """
 
 from __future__ import annotations
 
 import argparse
 import io
+import secrets
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -284,7 +284,20 @@ def make_restaurant_menu() -> bytes:
 
 # Not derived from anything worth reproducing, and deliberately never printed or written to
 # README.md, per the assignment's "a password you do NOT publish".
-_ENCRYPTION_PASSWORD = "vault-vantage-quietly-42"
+def _throwaway_password() -> str:
+    """A password that exists only for the duration of this call and is never stored.
+
+    The point of this fixture is a PDF nobody can open. A password committed next to it is
+    not that, whatever the file contains: it is a password in a repository, and the habit is
+    worse than the file. Generating one and discarding it means no copy of it exists
+    anywhere once the function returns.
+
+    This is the one sample whose bytes differ between runs, and deliberately so. The
+    determinism the other ten have is worth having because a diff under out/ then means the
+    generator changed rather than that it was run again. Keeping that property here would
+    require the password to be reproducible, which is the same as keeping it.
+    """
+    return secrets.token_urlsafe(32)
 
 
 def make_corrupt_encrypted() -> bytes:
@@ -297,7 +310,10 @@ def make_corrupt_encrypted() -> bytes:
     writer = PdfWriter()
     for page in reader.pages:
         writer.add_page(page)
-    writer.encrypt(_ENCRYPTION_PASSWORD)
+    # Encrypted with a password that is generated here and never returned, logged or
+    # stored, so the file is unopenable by anyone including us. load_document tries only the
+    # empty password, so this is the encrypted branch of the PDF reader, not a corrupt file.
+    writer.encrypt(_throwaway_password())
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()
