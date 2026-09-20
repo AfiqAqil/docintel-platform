@@ -1,0 +1,81 @@
+{
+    "document_id": "fab8ea53-38b6-445c-8790-033cb8522e7b",
+    "generated_at": "2026-09-20T14:44:56Z",
+    "document_type": "supporting_evidence",
+    "classification": {
+        "confidence": 1.0,
+        "notes": "The document contains a photograph intended to support a claim, indicating it is evidence related to damage from an incident."
+    },
+    "outcome": "COMPLETE",
+    "summary": "The document titled \"SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH\" contains a photograph submitted to support a claim related to impact damage. It is classified as complete, but the document is image-only, preventing snippet verification against any source text, resulting in unverified extracted information. There are no missing details noted in the document.",
+    "extracted": {
+        "document_title": {
+            "value": "SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH",
+            "snippet": "SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH",
+            "verified": null
+        },
+        "reference_number": {
+            "value": "CLM-2026-00931",
+            "snippet": "Claim Reference: CLM-2026-00931",
+            "verified": null
+        },
+        "related_party_name": {
+            "value": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+            "snippet": "taken at the scene by the \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022.",
+            "verified": null
+        },
+        "date": {
+            "value": "2026-06-02",
+            "snippet": "Date of Incident: 2026-06-02",
+            "verified": null
+        },
+        "monetary_amount": {
+            "value": null,
+            "snippet": null,
+            "verified": null
+        },
+        "summary": {
+            "value": "Photograph submitted in support of the claim regarding impact damage.",
+            "snippet": "Submitted in support of the claim referenced above.",
+            "verified": null
+        }
+    },
+    "missing_information": [],
+    "validation_errors": [],
+    "observations": [
+        "Document is image only; snippet verification could not run against it.",
+        "Input was image only, so evidence snippets could not be verified against source text. Extraction is unverified."
+    ],
+    "trace": [
+        {
+            "node": "load_document",
+            "status": "ok",
+            "duration_ms": 17,
+            "detail": null
+        },
+        {
+            "node": "classify",
+            "status": "ok",
+            "duration_ms": 1468,
+            "detail": null
+        },
+        {
+            "node": "extract_generic",
+            "status": "ok",
+            "duration_ms": 2262,
+            "detail": null
+        },
+        {
+            "node": "validate",
+            "status": "ok",
+            "duration_ms": 0,
+            "detail": null
+        },
+        {
+            "node": "mask_pii",
+            "status": "ok",
+            "duration_ms": 0,
+            "detail": null
+        }
+    ]
+}

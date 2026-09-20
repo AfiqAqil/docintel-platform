@@ -1,0 +1,12 @@
+         filename          |  status   |   outcome   |      doc_type       
+---------------------------+-----------+-------------+---------------------
+ claim_form_incomplete.pdf | COMPLETED | INCOMPLETE  | claim_form
+ invoice_repair.pdf        | COMPLETED | COMPLETE    | invoice
+ identity_card.png         | COMPLETED | COMPLETE    | identity_document
+ restaurant_menu.pdf       | COMPLETED | UNSUPPORTED | unknown
+ corrupt_encrypted.pdf     | FAILED    |             | unknown
+ policy_document.docx      | COMPLETED | COMPLETE    | policy_document
+ damage_photo.jpg          | COMPLETED | UNSUPPORTED | unknown
+ damage_photo.jpg          | COMPLETED | COMPLETE    | supporting_evidence
+(8 rows)
+

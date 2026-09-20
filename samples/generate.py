@@ -457,24 +457,74 @@ def make_identity_card() -> bytes:
 
 
 def make_damage_photo() -> bytes:
-    """A standalone synthetic scene, not a document scan: supporting evidence for a claim."""
-    width, height = 800, 600
-    image = Image.new("RGB", (width, height), (120, 150, 190))  # sky
+    """Supporting evidence: a labelled damage photograph attached to a claim.
+
+    The first version of this sample was an unlabelled drawing of a car, and a real run
+    classified it UNSUPPORTED. That was the classifier being right, not wrong: asked what a
+    stylised illustration of a vehicle is, a model correctly answered that it is not evidence
+    of anything. No amount of prompt tuning fixes a sample that does not depict what it
+    claims to.
+
+    What makes a photograph supporting evidence is not the pixels, it is the submission
+    around them. Real evidence reaching an insurer carries a claim reference, a caption and a
+    date, because otherwise nobody can tell which claim it belongs to. This sample now
+    carries the same, which also gives the generic extractor a reference number and a date to
+    find, so the type exercises its extraction path rather than merely reaching it.
+    """
+    width, height = 900, 760
+    image = Image.new("RGB", (width, height), (245, 245, 245))
     draw = ImageDraw.Draw(image)
-    draw.rectangle([0, 380, width, height], fill=(90, 90, 95))  # ground / driveway
+    header = _label_font(26)
+    label = _label_font(20)
 
-    # A car-shaped block with a visibly dented, discoloured panel.
-    draw.rounded_rectangle([120, 250, 680, 400], radius=30, fill=(180, 40, 40))
-    draw.rectangle([220, 200, 480, 260], fill=(150, 30, 30))  # roofline
-    draw.ellipse([170, 370, 260, 460], fill=(30, 30, 30))  # wheel
-    draw.ellipse([540, 370, 630, 460], fill=(30, 30, 30))  # wheel
-
-    # The dent: an irregular darker patch on the door panel.
-    draw.polygon(
-        [(360, 300), (420, 290), (450, 330), (410, 360), (350, 350)],
-        fill=(90, 20, 20),
+    # The submission header. This is what identifies the image as evidence for a claim.
+    draw.rectangle([0, 0, width, 110], fill=(38, 54, 82))
+    draw.text((30, 22), "SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH", fill=(255, 255, 255), font=header)
+    draw.text(
+        (30, 64),
+        f"Claim Reference: {CLAIM_REFERENCE}    Policy Number: {POLICY_NUMBER}",
+        fill=(215, 225, 240),
+        font=label,
     )
-    draw.line([(360, 300), (450, 330)], fill=(50, 10, 10), width=4)
+
+    # The photograph itself, inset with a border so it reads as an attached image.
+    photo_box = (40, 140, width - 40, 600)
+    draw.rectangle(photo_box, fill=(120, 150, 190))
+    draw.rectangle(photo_box, outline=(38, 54, 82), width=3)
+    draw.rectangle([43, 470, width - 43, 597], fill=(90, 90, 95))
+
+    draw.rounded_rectangle([160, 330, 700, 480], radius=30, fill=(180, 40, 40))
+    draw.rectangle([260, 280, 520, 340], fill=(150, 30, 30))
+    draw.ellipse([210, 450, 300, 540], fill=(30, 30, 30))
+    draw.ellipse([580, 450, 670, 540], fill=(30, 30, 30))
+
+    # The damage, with an arrow and a caption so it is identifiable as the subject.
+    draw.polygon(
+        [(400, 380), (460, 370), (490, 410), (450, 440), (390, 430)], fill=(90, 20, 20)
+    )
+    draw.line([(400, 380), (490, 410)], fill=(50, 10, 10), width=4)
+    draw.line([(560, 300), (480, 380)], fill=(255, 230, 60), width=5)
+    draw.polygon([(480, 380), (500, 360), (505, 385)], fill=(255, 230, 60))
+    draw.text((570, 285), "Impact damage", fill=(255, 230, 60), font=label)
+
+    draw.text(
+        (40, 625),
+        f"Date of Incident: {DATE_OF_INCIDENT}",
+        fill=(40, 40, 40),
+        font=label,
+    )
+    draw.text(
+        (40, 660),
+        "Photograph 1 of 1. Front nearside panel, taken at the scene by the policyholder.",
+        fill=(40, 40, 40),
+        font=label,
+    )
+    draw.text(
+        (40, 700),
+        "Submitted in support of the claim referenced above.",
+        fill=(40, 40, 40),
+        font=label,
+    )
 
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG", quality=90)
