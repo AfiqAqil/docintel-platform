@@ -14,6 +14,8 @@ data "aws_ecr_repository" "service" {
 }
 
 locals {
+  worker_scales = var.services["worker"].max_count > var.services["worker"].desired_count
+
   image = {
     for name, repo in data.aws_ecr_repository.service :
     name => "${repo.repository_url}:${var.image_tag}"
@@ -57,11 +59,12 @@ module "frontend" {
 
   health_check_command = ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
 
-  execution_role_arn = aws_iam_role.execution.arn
-  task_role_arn      = aws_iam_role.frontend.arn
-  subnet_ids         = aws_subnet.app[*].id
-  security_group_ids = [aws_security_group.frontend.id]
-  target_group_arn   = aws_lb_target_group.frontend.arn
+  execution_role_arn      = aws_iam_role.execution.arn
+  task_role_arn           = aws_iam_role.frontend.arn
+  subnet_ids              = aws_subnet.app[*].id
+  security_group_ids      = [aws_security_group.frontend.id]
+  attach_to_load_balancer = true
+  target_group_arn        = aws_lb_target_group.frontend.arn
 
   region             = var.region
   log_retention_days = var.log_retention_days
@@ -106,6 +109,7 @@ module "backend" {
   task_role_arn          = aws_iam_role.backend.arn
   subnet_ids             = aws_subnet.app[*].id
   security_group_ids     = [aws_security_group.backend.id]
+  register_in_dns        = true
   discovery_namespace_id = aws_service_discovery_private_dns_namespace.main.id
   # Registered as api.<namespace>, the name the architecture document uses throughout.
   discovery_name = "api"
@@ -182,7 +186,7 @@ module "worker" {
 # The minimum is one task, so the reaper always has a poll loop to run in.
 # ---------------------------------------------------------------------------------------
 resource "aws_appautoscaling_policy" "worker_out" {
-  count = module.worker.autoscaling_resource_id == null ? 0 : 1
+  count = local.worker_scales ? 1 : 0
 
   name               = "${local.name}-worker-scale-out"
   policy_type        = "StepScaling"
@@ -201,7 +205,7 @@ resource "aws_appautoscaling_policy" "worker_out" {
 }
 
 resource "aws_appautoscaling_policy" "worker_in" {
-  count = module.worker.autoscaling_resource_id == null ? 0 : 1
+  count = local.worker_scales ? 1 : 0
 
   name               = "${local.name}-worker-scale-in"
   policy_type        = "StepScaling"
@@ -220,7 +224,7 @@ resource "aws_appautoscaling_policy" "worker_in" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "worker_backlog" {
-  count = module.worker.autoscaling_resource_id == null ? 0 : 1
+  count = local.worker_scales ? 1 : 0
 
   alarm_name          = "${local.name}-worker-backlog"
   alarm_description   = "Processing requests are queueing. Adds one worker task."
@@ -236,7 +240,7 @@ resource "aws_cloudwatch_metric_alarm" "worker_backlog" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "worker_idle" {
-  count = module.worker.autoscaling_resource_id == null ? 0 : 1
+  count = local.worker_scales ? 1 : 0
 
   alarm_name          = "${local.name}-worker-idle"
   alarm_description   = "The queue has been empty for five minutes. Removes one worker task, down to the minimum."

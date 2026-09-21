@@ -62,7 +62,7 @@ resource "aws_ecs_task_definition" "this" {
 # An A record per running task in the private hosted zone Cloud Map owns. ECS registers a
 # task when it starts and removes it when it stops.
 resource "aws_service_discovery_service" "this" {
-  count = var.discovery_namespace_id == null ? 0 : 1
+  count = var.register_in_dns ? 1 : 0
 
   name = coalesce(var.discovery_name, var.name)
 
@@ -94,7 +94,7 @@ resource "aws_ecs_service" "this" {
   }
 
   dynamic "load_balancer" {
-    for_each = var.target_group_arn == null ? [] : [1]
+    for_each = var.attach_to_load_balancer ? [1] : []
     content {
       target_group_arn = var.target_group_arn
       container_name   = var.name

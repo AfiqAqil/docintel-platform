@@ -89,14 +89,28 @@ variable "cpu_target_percent" {
   default     = null
 }
 
+# Whether a service has a target group or a DNS name is decided by a plain boolean, not by
+# testing the ARN or id for null. Those values are unknown until apply, and Terraform has to
+# know how many instances of a resource exist while it is still planning.
+variable "attach_to_load_balancer" {
+  type    = bool
+  default = false
+}
+
 variable "target_group_arn" {
-  description = "Load balancer target group. null for a service that is not behind the load balancer."
+  description = "Required when attach_to_load_balancer is true."
   type        = string
   default     = null
 }
 
+variable "register_in_dns" {
+  description = "Register the service's tasks in Cloud Map. Only a service that others call by name needs this."
+  type        = bool
+  default     = false
+}
+
 variable "discovery_namespace_id" {
-  description = "Cloud Map namespace to register in. null for a service nobody calls by name."
+  description = "Required when register_in_dns is true."
   type        = string
   default     = null
 }
