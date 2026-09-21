@@ -100,7 +100,11 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  github_sub_prefix = "repo:${var.github_repository}"
+  github_owner = split("/", var.github_repository)[0]
+  github_repo  = split("/", var.github_repository)[1]
+
+  # repo:<owner>@<owner id>/<repo>@<repo id>, the form the token actually carries.
+  github_sub_prefix = "repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repository_id}"
 }
 
 # Read only, assumable from a pull request. It can plan, and it cannot change anything.
