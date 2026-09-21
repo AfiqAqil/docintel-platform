@@ -1,0 +1,55 @@
+# The one dispatched deploy run. GitHub Actions run 35586451274, workflow deploy.yml.
+# https://github.com/AfiqAqil/docintel-platform/actions/runs/35586451274
+
+event       workflow_dispatch
+branch      main
+commit      f5bf8f6a8e37833a5e8f8a331d200ab3400c4e97
+conclusion  success
+started     2026-09-21T10:01:11Z
+finished    2026-09-21T10:06:03Z
+
+# Jobs and steps
+success  build and publish images
+    success  Run actions/checkout@v4
+    success  Refuse anything that is not main
+    success  Run echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+    success  Run aws-actions/configure-aws-credentials@v4
+    success  Run aws-actions/amazon-ecr-login@v2
+    success  Run docker/setup-buildx-action@v3
+    success  Build and push the three images
+success  terraform apply and verify
+    success  Run actions/checkout@v4
+    success  Run hashicorp/setup-terraform@v3
+    success  Run aws-actions/configure-aws-credentials@v4
+    success  init
+    success  apply
+    success  Wait for the three services to be stable
+    success  Every service runs the image that was just published
+    success  The load balancer target is healthy
+
+# Images published (from the job log)
+277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/backend:f5bf8f6a8e37@sha256:021ca1ddfc01d19c53310cd0b06a982c5a896833c82df63d74cbafd17f3365d5
+277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/frontend:f5bf8f6a8e37@sha256:e464a8bb57eaadc01635789e1825b59e4c2a0cbe4575436b74d401f86907f73e
+277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/worker:f5bf8f6a8e37@sha256:c40557bdc62177da13b18a5f905950e212acf10a44d4da89aea653eb80efcae0
+
+# What terraform apply changed (from the job log)
+  "277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/backend:834e970af72a" -> "277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/backend:f5bf8f6a8e37"
+  "277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/frontend:834e970af72a" -> "277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/frontend:f5bf8f6a8e37"
+  "277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/worker:834e970af72a" -> "277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/worker:f5bf8f6a8e37"
+Apply complete! Resources: 3 added, 3 changed, 3 destroyed
+
+# The pipeline's own checks (from the job log)
+frontend -> 277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/frontend:f5bf8f6a8e37
+backend -> 277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/backend:f5bf8f6a8e37
+worker -> 277707137200.dkr.ecr.ap-southeast-1.amazonaws.com/docintel/worker:f5bf8f6a8e37
+10.0.10.61	healthy
+
+# Checked independently from AWS afterwards, not by the pipeline
+frontend  task definition revision 2  running 1  rollout COMPLETED  image tag f5bf8f6a8e37
+backend  task definition revision 2  running 1  rollout COMPLETED  image tag f5bf8f6a8e37
+worker  task definition revision 2  running 1  rollout COMPLETED  image tag f5bf8f6a8e37
+
+# End to end, through the load balancer, against the images this run deployed
+invoice_repair.pdf -> S3 POST 204 -> QUEUED -> COMPLETED, COMPLETE, invoice, in about 18 seconds
+10 fields extracted, 4 line item rows, 0 validation errors
+the document uploaded before the deploy was still listed afterwards

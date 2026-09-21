@@ -11,6 +11,7 @@ supports is one a reader would otherwise have to take on trust.
 | `aws-deploy-state.txt` | The deployed environment: three ECS services stable, the frontend target healthy, the `api.docintel.internal` A record in the private hosted zone, and the three route tables showing that only the worker has a default route |
 | `aws-e2e-report-claim-form.json` | A report produced on AWS, from a browser style upload through the load balancer |
 | `aws-e2e-worker-logs.txt` | The worker's CloudWatch log lines for that document, and its startup: waiting for the schema, then ignoring the `s3:TestEvent` |
+| `ci-deploy-run.txt` | The one dispatched run of `deploy.yml`: every step, the three images it published under the git SHA, what `terraform apply` changed, the pipeline's own checks, the same facts read back from AWS independently, and an upload through the load balancer against the images it deployed |
 
 The local stack is docker compose: LocalStack for S3 and SQS, PostgreSQL, and the three
 services built from the same Dockerfiles that get deployed. The upload goes from the browser
