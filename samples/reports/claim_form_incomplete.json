@@ -1,13 +1,13 @@
 {
   "document_id": "claim_form_incomplete",
-  "generated_at": "2026-09-20T13:34:11Z",
+  "generated_at": "2026-09-21T11:13:25Z",
   "document_type": "claim_form",
   "classification": {
-    "confidence": 0.9,
-    "notes": "The document is specifically titled 'Insurance Claim Form' and contains relevant information regarding a claim for damage, indicating that it is a claim form."
+    "confidence": 1.0,
+    "notes": "The document is an insurance claim form detailing an incident, including information about the claimant and the nature of the claim."
   },
   "outcome": "INCOMPLETE",
-  "summary": "The document is a claim form that is marked as incomplete due to missing information. The form includes details about the claimant, such as their name, address, phone number, and email, but lacks a claim reference and the claimed amount. The incident described involved a kitchen pipe burst on a specific date, resulting in water damage to flooring and cabinets, with the claim filed shortly after the incident. The location of the incident is also noted, though it remains masked.",
+  "summary": "The document is a claim form that has been marked as incomplete due to missing information. The claimant reported an incident involving a burst kitchen pipe that caused water damage to flooring and cabinets, which occurred on a specific date and was filed shortly thereafter. However, the claim lacks a reference number and the amount being claimed, which are necessary for processing. The claimant's personal details, including name, address, phone number, and email, have been masked for privacy.",
   "extracted": {
     "policy_number": {
       "value": "POL-004821",
@@ -81,13 +81,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1314,
+      "duration_ms": 1512,
       "detail": null
     },
     {
       "node": "extract_claim",
       "status": "ok",
-      "duration_ms": 4762,
+      "duration_ms": 2911,
       "detail": null
     },
     {

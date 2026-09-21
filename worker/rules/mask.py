@@ -23,6 +23,7 @@ Raw text, page images and unmasked values are never written to logs or persisted
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 from graph.state import FieldValue, State, StepRecord
@@ -107,9 +108,36 @@ def _redact_occurrences(text: str, secrets: list[tuple[str, bool]]) -> str:
     appears: in its own field, quoted inside a snippet, or mentioned in a trace detail.
     """
     for secret, reveal_tail in secrets:
-        if secret and secret in text:
-            text = text.replace(secret, mask_value(secret, reveal_tail=reveal_tail))
+        if not secret or not secret.strip():
+            continue
+        text = _occurrence_pattern(secret).sub(_masker(reveal_tail), text)
     return text
+
+
+def _masker(reveal_tail: bool) -> Callable[[re.Match[str]], str]:
+    """The replacement for one secret: mask whatever text was actually found."""
+
+    def replace(found: re.Match[str]) -> str:
+        return mask_value(found.group(0), reveal_tail=reveal_tail)
+
+    return replace
+
+
+def _occurrence_pattern(secret: str) -> re.Pattern[str]:
+    """A pattern that finds `secret` the way snippet verification finds a snippet.
+
+    Verification normalises whitespace and case before comparing, so a snippet is accepted
+    when it differs from the value only in line breaks or capitalisation. Masking used an
+    exact text match, and the two disagreed: an address that wrapped onto a second line in
+    the source verified, and then went into the report unmasked, because the snippet held a
+    newline where the value held a space.
+
+    Any run of whitespace in the value now matches any run of whitespace in the text, and
+    case is ignored. What gets masked is the text actually found, so its shape, line breaks
+    included, is what the mask preserves.
+    """
+    parts = [re.escape(part) for part in secret.split()]
+    return re.compile(r"\s+".join(parts), re.IGNORECASE)
 
 
 

@@ -1,13 +1,13 @@
 {
   "document_id": "policy_document",
-  "generated_at": "2026-09-20T13:34:48Z",
+  "generated_at": "2026-09-21T11:14:01Z",
   "document_type": "policy_document",
   "classification": {
-    "confidence": 1.0,
-    "notes": "The document details a home insurance policy, including coverage limits, conditions, and policy period, indicating it is a policy document."
+    "confidence": 0.95,
+    "notes": "The document outlines the terms and conditions of a home insurance policy, including coverage details and limits, which categorizes it as a policy document."
   },
   "outcome": "COMPLETE",
-  "summary": "The processed document is a complete home insurance policy titled \"Quillmarsh Mutual Assurance - Home Insurance Policy,\" which outlines coverage for both the property and its contents. It includes a monetary amount referencing the coverage limit and is dated for the start of a new policy term. There were no missing pieces of information identified during the extraction process, although the extraction was attempted again due to prior validation errors.",
+  "summary": "The document is a complete policy document for a home insurance policy issued by Quillmarsh Mutual Assurance, which outlines coverage for the specified property and its contents, subject to certain limits and exclusions. The policy is dated January 1, 2026, and provides coverage up to a specified monetary amount.",
   "extracted": {
     "document_title": {
       "value": "Quillmarsh Mutual Assurance - Home Insurance Policy",
@@ -35,16 +35,14 @@
       "verified": true
     },
     "summary": {
-      "value": "This document is a home insurance policy providing cover for the property and its contents.",
+      "value": "This policy provides cover for the property and contents named above, subject to the limits and exclusions set out in the schedule below.",
       "snippet": "This policy provides cover for the property and contents named above, subject to the limits and exclusions set out in the schedule below.",
       "verified": true
     }
   },
   "missing_information": [],
   "validation_errors": [],
-  "observations": [
-    "Extraction was retried once with the previous validation errors appended."
-  ],
+  "observations": [],
   "trace": [
     {
       "node": "load_document",
@@ -55,25 +53,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1286,
+      "duration_ms": 1287,
       "detail": null
     },
     {
       "node": "extract_generic",
       "status": "ok",
-      "duration_ms": 2044,
-      "detail": null
-    },
-    {
-      "node": "validate",
-      "status": "ok",
-      "duration_ms": 2,
-      "detail": null
-    },
-    {
-      "node": "extract_generic",
-      "status": "ok",
-      "duration_ms": 2034,
+      "duration_ms": 2031,
       "detail": null
     },
     {

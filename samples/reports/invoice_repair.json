@@ -1,13 +1,13 @@
 {
   "document_id": "invoice_repair",
-  "generated_at": "2026-09-20T13:34:41Z",
+  "generated_at": "2026-09-21T11:13:57Z",
   "document_type": "invoice",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is an invoice detailing repairs made to a vehicle, including specific costs for various services and a total amount due, which aligns with the characteristics of an invoice."
+    "notes": "The document is an invoice detailing repair services provided, including line items, costs, and a total amount due."
   },
   "outcome": "COMPLETE",
-  "summary": "The document is a complete invoice from a vehicle repair service issued on May 14, 2026. It details a transaction between the vendor and a masked customer, including a unique invoice number and a policy number. The invoice lists several line items for services rendered, which include front bumper replacement, paint and refinishing, labor for 12 hours, and a diagnostic scan, with each item's quantity, unit price, and total amount clearly stated. The subtotal for the services amounts to 1,865.50, with no tax applied, leading to a total invoice amount of 1,865.50. The invoice does not contain any missing information or additional observations.",
+  "summary": "The document is a complete invoice from an auto repair vendor detailing services provided to a customer. Dated in May 2026, it includes an invoice number and a policy number. The invoice lists several line items, including a front bumper replacement, paint and refinishing, labor for twelve hours, and a diagnostic scan, with each item verified for quantity, unit price, and total amount. The subtotal for the services rendered is noted as 1,865.50, with no tax applied, resulting in a total amount due of 1,865.50. There are no missing pieces of information or additional observations noted in the document.",
   "extracted": {
     "invoice_number": {
       "value": "INV-2026-00456",
@@ -152,19 +152,19 @@
     {
       "node": "load_document",
       "status": "ok",
-      "duration_ms": 2,
+      "duration_ms": 3,
       "detail": null
     },
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1348,
+      "duration_ms": 1138,
       "detail": null
     },
     {
       "node": "extract_invoice",
       "status": "ok",
-      "duration_ms": 7825,
+      "duration_ms": 7167,
       "detail": null
     },
     {

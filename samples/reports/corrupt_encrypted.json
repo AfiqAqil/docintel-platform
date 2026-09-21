@@ -1,6 +1,6 @@
 {
   "document_id": "corrupt_encrypted",
-  "generated_at": "2026-09-20T13:34:19Z",
+  "generated_at": "2026-09-21T11:13:32Z",
   "document_type": "unknown",
   "outcome": "FAILED",
   "summary": "Processing failed in load_document: PDF is encrypted and could not be opened",
@@ -12,7 +12,7 @@
     {
       "node": "load_document",
       "status": "error",
-      "duration_ms": 8,
+      "duration_ms": 7,
       "detail": null
     }
   ],

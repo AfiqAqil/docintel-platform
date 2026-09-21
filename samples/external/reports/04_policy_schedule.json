@@ -1,0 +1,78 @@
+{
+  "document_id": "04_policy_schedule",
+  "generated_at": "2026-09-21T11:14:34Z",
+  "document_type": "policy_document",
+  "classification": {
+    "confidence": 0.95,
+    "notes": "The document is a policy schedule that outlines the coverage details, terms, and conditions of an insurance policy, indicating it is a policy document."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The processed document is a policy schedule that confirms the selected coverage for a related party, with a monetary amount specified. The document is complete and dated September 2, 2026. No missing information or additional observations were noted.",
+  "extracted": {
+    "document_title": {
+      "value": "Policy Schedule",
+      "snippet": "Policy Schedule",
+      "verified": true
+    },
+    "reference_number": {
+      "value": "POL-807214",
+      "snippet": "Policy number\nPOL-807214",
+      "verified": true
+    },
+    "related_party_name": {
+      "value": "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "This schedule confirms the selected cover for \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022.",
+      "verified": true
+    },
+    "date": {
+      "value": "2026-09-02",
+      "snippet": "Authorised by: ______________________________    Date: 2026-09-02",
+      "verified": true
+    },
+    "monetary_amount": {
+      "value": "350,000.00",
+      "snippet": "Buildings and permanent fixtures\n350,000.00",
+      "verified": true
+    },
+    "summary": {
+      "value": "This schedule confirms the selected cover for \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022.",
+      "snippet": "This schedule confirms the selected cover for \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022.",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 8,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1250,
+      "detail": null
+    },
+    {
+      "node": "extract_generic",
+      "status": "ok",
+      "duration_ms": 2355,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

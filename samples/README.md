@@ -35,3 +35,33 @@ python samples/generate.py --out samples/out
 | `claim_form_scanned.pdf` | PDF, image only | `pypdfium2` render path. The complete claim form rendered to an image and embedded as a full page PDF with no text layer |
 | `restaurant_menu.pdf` | PDF, real text | Out of scope document type. Classification routes to `UNSUPPORTED` |
 | `corrupt_encrypted.pdf` | PDF, encrypted | Unreadable, terminal failure, status `FAILED` |
+
+## External documents
+
+`external/` holds six documents this repository did not generate. They were produced by a
+separate tool from a plain description ("a completed claim form", "a repair invoice with
+four line items"), with their own layout, their own people and their own insurer, and with
+no knowledge of this platform's prompts or rules. Everything in them is fictional, and the
+identity card is marked as a specimen.
+
+They exist because a platform tested only against documents shaped by its own generator is
+testing its assumptions. These found two real defects that the eleven samples above never
+could, both recorded in [`docs/BUILD_LOG.md`](../docs/BUILD_LOG.md).
+
+| File | Format | Result | Why |
+|---|---|---|---|
+| `01_completed_claim_form.pdf` | PDF | `COMPLETE` | |
+| `02_blank_claim_reference_and_amount.pdf` | PDF | `INCOMPLETE` | The two blank fields are printed as underscores, and are reported as missing rather than extracted as a value |
+| `03_repair_invoice.pdf` | PDF | `COMPLETE` | Line items are a real table, with the header row far from the cells |
+| `04_policy_schedule.docx` | DOCX | `COMPLETE` | Coverage table inside a DOCX |
+| `05_delayed_claim_complaint.docx` | DOCX | `COMPLETE` | Prose correspondence |
+| `06_eldoria_national_identity_card_specimen.png` | PNG | `INCOMPLETE` | Its number, `ELD-260921-74`, does not match this platform's own identity number convention, one letter and eight digits. That is the format rule working, on a document that was never told the rule |
+
+Reports from a real model are in `external/reports/`. To reproduce:
+
+```
+cd worker
+LLM_PROVIDER=openai LLM_MODEL_ID=gpt-4o-mini python run_local.py \
+  --samples ../samples/external --out ../samples/external/reports
+```
+

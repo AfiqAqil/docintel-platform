@@ -1,0 +1,183 @@
+{
+  "document_id": "03_repair_invoice",
+  "generated_at": "2026-09-21T11:14:29Z",
+  "document_type": "invoice",
+  "classification": {
+    "confidence": 0.95,
+    "notes": "The document is an invoice detailing a vehicle repair transaction, including itemized charges and totals, which fits the definition of an invoice."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The document is an invoice from a vendor specializing in repair works, dated in August 2026. It details several services provided to a customer, including the replacement of a rear bumper cover, installation of an LED tail lamp assembly, calibration of parking sensors, and paint preparation and finish. Each service is listed with a description, quantity, unit price, and total amount, all of which have been verified. The subtotal for the services amounts to a specified total, with no tax applied, resulting in a final total that matches the subtotal. There are no missing pieces of information or additional observations noted in the document.",
+  "extracted": {
+    "invoice_number": {
+      "value": "INV-2026-31984",
+      "snippet": "Invoice number\nINV-2026-31984",
+      "verified": true
+    },
+    "invoice_date": {
+      "value": "2026-08-25",
+      "snippet": "Invoice date\n2026-08-25",
+      "verified": true
+    },
+    "vendor_name": {
+      "value": "Harborline Repair Works",
+      "snippet": "Work completed by Harborline Repair Works, 4 Rivet Court, Bellwether, Elandor | service@example.com",
+      "verified": true
+    },
+    "customer_name": {
+      "value": "\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
+      "snippet": "Bill to\n\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "customer_address": {
+      "value": "\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Customer address\n\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "policy_number": {
+      "value": null,
+      "snippet": null,
+      "verified": null
+    },
+    "line_items": [
+      {
+        "description": {
+          "value": "Rear bumper cover replacement",
+          "snippet": "Rear bumper cover replacement",
+          "verified": true
+        },
+        "quantity": {
+          "value": "1",
+          "snippet": "1",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "425.00",
+          "snippet": "425.00",
+          "verified": true
+        },
+        "amount": {
+          "value": "425.00",
+          "snippet": "425.00",
+          "verified": true
+        }
+      },
+      {
+        "description": {
+          "value": "LED tail lamp assembly",
+          "snippet": "LED tail lamp assembly",
+          "verified": true
+        },
+        "quantity": {
+          "value": "1",
+          "snippet": "1",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "780.00",
+          "snippet": "780.00",
+          "verified": true
+        },
+        "amount": {
+          "value": "780.00",
+          "snippet": "780.00",
+          "verified": true
+        }
+      },
+      {
+        "description": {
+          "value": "Parking sensor calibration",
+          "snippet": "Parking sensor calibration",
+          "verified": true
+        },
+        "quantity": {
+          "value": "1",
+          "snippet": "1",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "165.00",
+          "snippet": "165.00",
+          "verified": true
+        },
+        "amount": {
+          "value": "165.00",
+          "snippet": "165.00",
+          "verified": true
+        }
+      },
+      {
+        "description": {
+          "value": "Paint preparation and finish",
+          "snippet": "Paint preparation and finish",
+          "verified": true
+        },
+        "quantity": {
+          "value": "1",
+          "snippet": "1",
+          "verified": true
+        },
+        "unit_price": {
+          "value": "120.00",
+          "snippet": "120.00",
+          "verified": true
+        },
+        "amount": {
+          "value": "120.00",
+          "snippet": "120.00",
+          "verified": true
+        }
+      }
+    ],
+    "subtotal": {
+      "value": "1,490.00",
+      "snippet": "Subtotal\n1,490.00",
+      "verified": true
+    },
+    "tax_amount": {
+      "value": "0.00",
+      "snippet": "Tax\n0.00",
+      "verified": true
+    },
+    "total_amount": {
+      "value": "1,490.00",
+      "snippet": "TOTAL\n1,490.00",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 7,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1434,
+      "detail": null
+    },
+    {
+      "node": "extract_invoice",
+      "status": "ok",
+      "duration_ms": 7191,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

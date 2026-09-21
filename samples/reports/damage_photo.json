@@ -1,35 +1,72 @@
 {
   "document_id": "damage_photo",
-  "generated_at": "2026-09-20T13:34:26Z",
-  "document_type": "unknown",
+  "generated_at": "2026-09-21T11:13:41Z",
+  "document_type": "supporting_evidence",
   "classification": {
-    "confidence": 0.0,
-    "notes": "The document appears to be an image of a simplified illustration rather than a text-based document related to insurance. Therefore, it does not fit any of the specified classifications."
+    "confidence": 0.95,
+    "notes": null
   },
-  "outcome": "UNSUPPORTED",
-  "summary": "The document reviewed is an image-only file, which prevented any automated verification or analysis. It was not possible to ascertain the document type, leading to its routing for manual review. There were no additional observations or missing information noted during the process.",
-  "extracted": {},
+  "outcome": "COMPLETE",
+  "summary": "The document is a supporting piece of evidence consisting of a photograph that depicts damage at the scene, taken by the policyholder. It is categorized as complete, but since it is an image-only document, there was no opportunity for snippet verification against source text, leaving the extraction unverified. There are no related parties or monetary amounts mentioned, and no missing information was identified.",
+  "extracted": {
+    "document_title": {
+      "value": "SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH",
+      "snippet": "SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH",
+      "verified": null
+    },
+    "reference_number": {
+      "value": "CLM-2026-00931",
+      "snippet": "Claim Reference: CLM-2026-00931",
+      "verified": null
+    },
+    "related_party_name": {
+      "value": null,
+      "snippet": null,
+      "verified": null
+    },
+    "date": {
+      "value": "2026-06-02",
+      "snippet": "Date of Incident: 2026-06-02",
+      "verified": null
+    },
+    "monetary_amount": {
+      "value": null,
+      "snippet": null,
+      "verified": null
+    },
+    "summary": {
+      "value": "Photograph of damage taken at the scene by the policyholder.",
+      "snippet": "Photograph 1 of 1. Front nearside panel, taken at the scene by the policyholder.",
+      "verified": null
+    }
+  },
   "missing_information": [],
   "validation_errors": [],
   "observations": [
     "Document is image only; snippet verification could not run against it.",
-    "The document type could not be determined. Routed for manual review."
+    "Input was image only, so evidence snippets could not be verified against source text. Extraction is unverified."
   ],
   "trace": [
     {
       "node": "load_document",
       "status": "ok",
-      "duration_ms": 9,
+      "duration_ms": 17,
       "detail": null
     },
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1021,
+      "duration_ms": 1120,
       "detail": null
     },
     {
-      "node": "mark_unsupported",
+      "node": "extract_generic",
+      "status": "ok",
+      "duration_ms": 2792,
+      "detail": null
+    },
+    {
+      "node": "validate",
       "status": "ok",
       "duration_ms": 0,
       "detail": null
