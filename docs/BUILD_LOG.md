@@ -1276,6 +1276,54 @@ dates and amounts, name the right vendor, and say "masked" where a value is mask
 
 ---
 
+## The second deploy, and the teardown
+
+**The fixes went out through the pipeline.** After the masking and table fixes were merged,
+`deploy.yml` was dispatched from `main` a second time (run 35594952968). All three services
+moved to task definition revision 3 on image `88b5a82d61e7`, read back from AWS and not only
+from the run. The two documents that had exposed the defects were then uploaded to the live
+environment: the wrapped address came back masked in its own snippet with the raw address
+nowhere in the report, and the table invoice came back `COMPLETE` with every line item cell
+verified and no policy number invented from the repair order.
+
+**Then the environment was destroyed, on purpose.** Nobody outside the allowlist can open it,
+the evidence that it works is committed, and it costs about 6 USD a day to leave idle. It ran
+for about three hours. The bootstrap stack stays, at about 0.40 USD a month, which is what
+makes bringing it back one pipeline run or one `terraform apply`, about 15 minutes.
+
+**The destroy was interrupted, and that is worth recording.** It ran as a background task of
+the session that started it. The session ended at 72 of 91 resources, which killed Terraform
+mid run (`Error: Plugin did not respond`). What was left included the NAT gateway and five
+interface endpoints, the resources that bill by the hour. Before resuming, two things were
+checked rather than assumed: that no stale lock object sat beside the state file, and that the
+state still listed exactly the 19 resources AWS still had. It did, because Terraform writes
+state as it goes. The destroy was then resumed as a detached process and removed the rest in
+81 seconds.
+
+The lesson is operational, not about Terraform: a long apply or destroy must not depend on
+the lifetime of the terminal or session that launched it. In a pipeline that is free. By hand
+it means `nohup`, or a CI job.
+
+**Verified from AWS, not from the exit code.**
+
+```
+terraform state list (main stack)     0 resources
+ECS clusters 0   load balancers 0   NAT gateways 0   elastic IPs 0   VPC endpoints 0
+project VPCs 0   RDS instances 0    RDS snapshots 0  SQS queues 0    log groups 0
+private DNS namespaces 0            task and execution roles 0       documents bucket 404
+
+bootstrap stack                       17 resources, untouched
+  state bucket present, 3 ECR repositories, latest image 88b5a82d61e7,
+  OpenAI key secret present, both CI roles present
+deploy workflow runs since            none. Nothing rebuilds the stack on its own
+```
+
+`destroyable = true` in `dev.tfvars` is what made this clean: the bucket went with 20 objects
+in it, the database went without a final snapshot, and nothing was left behind to block a
+recreate by name.
+
+---
+
 ## The Bedrock quota block: what is known, and what was decided
 
 Recorded here because it decides how the platform is deployed, and because the facts are
