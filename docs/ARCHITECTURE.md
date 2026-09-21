@@ -393,6 +393,12 @@ copied character for character, and for a value inside a table, the cell's own t
 nothing else. In extracted text a table's header row is far from its cells, so
 "Amount 425.00" is not a span that exists, even though both words do.
 
+Prompts state each rule once, in the system prompt. Schema descriptions say what a field is,
+not how to fill it in, because a Pydantic description, and a class docstring, is sent to the
+model on every call. Every prompt that reads a document also says that the document is
+untrusted data and that instructions inside it are never followed: a claim form can contain
+"ignore your instructions" as easily as it can contain a date.
+
 Model calls run at temperature 0. Classification and extraction are not creative tasks, and
 the same document should produce the same answer.
 

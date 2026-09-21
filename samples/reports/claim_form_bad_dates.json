@@ -1,13 +1,13 @@
 {
   "document_id": "claim_form_bad_dates",
-  "generated_at": "2026-09-21T11:13:10Z",
+  "generated_at": "2026-09-21T11:26:05Z",
   "document_type": "claim_form",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is an insurance claim form detailing the incident, claimant information, and the amount being claimed, which fits the definition of a claim form."
+    "notes": "The document is identified as a claim form due to its title and the presence of specific claim-related information such as policy number, claim reference, and details about the incident."
   },
   "outcome": "INCOMPLETE",
-  "summary": "The document is a claim form that has been marked as incomplete. It includes details about a water damage incident caused by a burst kitchen pipe, which occurred shortly before the claim was filed. The claimant's information, including name, address, phone number, and email, has been masked for privacy. The claim references a specific policy number and includes a claimed amount for damages. There were no missing pieces of information noted, although the extraction process was attempted again due to previous validation errors.",
+  "summary": "The processed document is a claim form for a water damage incident involving a kitchen pipe burst, which occurred on June 15, 2026. The claim was filed on June 10, 2026, and references a claimed amount of 3250.00. The outcome of the processing indicates that the claim is incomplete, but no specific missing information has been identified. The claimant's details, including name, address, phone number, and email, have been masked for privacy. There was an observation noted that the extraction process was retried once due to previous validation errors.",
   "extracted": {
     "policy_number": {
       "value": "POL-004821",
@@ -76,19 +76,19 @@
     {
       "node": "load_document",
       "status": "ok",
-      "duration_ms": 0,
+      "duration_ms": 1,
       "detail": null
     },
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1777,
+      "duration_ms": 1487,
       "detail": null
     },
     {
       "node": "extract_claim",
       "status": "ok",
-      "duration_ms": 5588,
+      "duration_ms": 3472,
       "detail": null
     },
     {
@@ -100,7 +100,7 @@
     {
       "node": "extract_claim",
       "status": "ok",
-      "duration_ms": 7275,
+      "duration_ms": 3814,
       "detail": null
     },
     {

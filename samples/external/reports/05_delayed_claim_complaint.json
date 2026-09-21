@@ -1,13 +1,13 @@
 {
   "document_id": "05_delayed_claim_complaint",
-  "generated_at": "2026-09-21T11:14:38Z",
+  "generated_at": "2026-09-21T11:27:24Z",
   "document_type": "customer_correspondence",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is a formal complaint from a customer regarding the handling of a claim, which indicates it is correspondence related to customer service rather than a claim form or other document type."
+    "notes": "The document is a formal complaint from a customer regarding the handling of their claim, which fits the category of customer correspondence."
   },
   "outcome": "COMPLETE",
-  "summary": "The document is a customer correspondence titled \"Customer Complaint,\" which addresses a formal complaint regarding delays in the handling of a household claim. The complaint was submitted on September 10, 2026, and involves a monetary amount of 1,260.00. The outcome of the correspondence is marked as complete, and there are no missing information or additional observations noted.",
+  "summary": "The processed document is a customer correspondence titled \"Customer Complaint\" with the reference number POL-429816. It was created on September 10, 2026, and involves a complaint regarding a delay in handling a household claim. The monetary amount mentioned in the complaint is 1,260.00. There are no missing information or additional observations noted in the document. The outcome of the processing is marked as complete.",
   "extracted": {
     "document_title": {
       "value": "Customer Complaint",
@@ -21,7 +21,7 @@
     },
     "related_party_name": {
       "value": "\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
-      "snippet": "Yours faithfully,\n\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
       "verified": true
     },
     "date": {
@@ -31,11 +31,11 @@
     },
     "monetary_amount": {
       "value": "1,260.00",
-      "snippet": "I have paid 1,260.00 for temporary measures.",
+      "snippet": "1,260.00",
       "verified": true
     },
     "summary": {
-      "value": "A formal complaint about the delay in handling a household claim.",
+      "value": "I am writing to make a formal complaint about the delay in handling my household claim.",
       "snippet": "I am writing to make a formal complaint about the delay in handling my household claim.",
       "verified": true
     }
@@ -53,13 +53,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1308,
+      "duration_ms": 1055,
       "detail": null
     },
     {
       "node": "extract_generic",
       "status": "ok",
-      "duration_ms": 1748,
+      "duration_ms": 1912,
       "detail": null
     },
     {

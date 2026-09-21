@@ -1,37 +1,37 @@
 {
   "document_id": "03_repair_invoice",
-  "generated_at": "2026-09-21T11:14:29Z",
+  "generated_at": "2026-09-21T11:27:14Z",
   "document_type": "invoice",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is an invoice detailing a vehicle repair transaction, including itemized charges and totals, which fits the definition of an invoice."
+    "notes": "The document clearly identifies itself as a vehicle repair invoice, detailing the services rendered and associated costs."
   },
   "outcome": "COMPLETE",
-  "summary": "The document is an invoice from a vendor specializing in repair works, dated in August 2026. It details several services provided to a customer, including the replacement of a rear bumper cover, installation of an LED tail lamp assembly, calibration of parking sensors, and paint preparation and finish. Each service is listed with a description, quantity, unit price, and total amount, all of which have been verified. The subtotal for the services amounts to a specified total, with no tax applied, resulting in a final total that matches the subtotal. There are no missing pieces of information or additional observations noted in the document.",
+  "summary": "The processed document is an invoice from Harborline Repair Works dated August 25, 2026, with the invoice number INV-2026-31984. The invoice details services provided to a customer, whose information is masked. The line items include a rear bumper cover replacement for $425.00, an LED tail lamp assembly for $780.00, parking sensor calibration for $165.00, and paint preparation and finish for $120.00, leading to a subtotal of $1,490.00. There is no tax applied, making the total amount due also $1,490.00. There are no missing information or observations noted in the document.",
   "extracted": {
     "invoice_number": {
       "value": "INV-2026-31984",
-      "snippet": "Invoice number\nINV-2026-31984",
+      "snippet": "INV-2026-31984",
       "verified": true
     },
     "invoice_date": {
       "value": "2026-08-25",
-      "snippet": "Invoice date\n2026-08-25",
+      "snippet": "2026-08-25",
       "verified": true
     },
     "vendor_name": {
       "value": "Harborline Repair Works",
-      "snippet": "Work completed by Harborline Repair Works, 4 Rivet Court, Bellwether, Elandor | service@example.com",
+      "snippet": "Harborline Repair Works",
       "verified": true
     },
     "customer_name": {
       "value": "\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
-      "snippet": "Bill to\n\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
       "verified": true
     },
     "customer_address": {
       "value": "\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
-      "snippet": "Customer address\n\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
       "verified": true
     },
     "policy_number": {
@@ -131,17 +131,17 @@
     ],
     "subtotal": {
       "value": "1,490.00",
-      "snippet": "Subtotal\n1,490.00",
+      "snippet": "1,490.00",
       "verified": true
     },
     "tax_amount": {
       "value": "0.00",
-      "snippet": "Tax\n0.00",
+      "snippet": "0.00",
       "verified": true
     },
     "total_amount": {
       "value": "1,490.00",
-      "snippet": "TOTAL\n1,490.00",
+      "snippet": "1,490.00",
       "verified": true
     }
   },
@@ -158,13 +158,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1434,
+      "duration_ms": 1052,
       "detail": null
     },
     {
       "node": "extract_invoice",
       "status": "ok",
-      "duration_ms": 7191,
+      "duration_ms": 4381,
       "detail": null
     },
     {

@@ -49,13 +49,13 @@ class Classification(BaseModel):
 
 
 class ExtractedField(BaseModel):
-    """One extracted value, plus the exact source text it was read from.
+    """One extracted value and the exact text it was read from."""
 
-    `snippet` must be a verbatim quote, copied character for character from the document,
-    never paraphrased. A later deterministic check confirms the snippet is really in the
-    source text and rejects the field otherwise, so a field with no genuine quote to back it
-    should be left null rather than guessed at.
-    """
+    # A class docstring is not a private comment: Pydantic publishes it as the schema's
+    # description, so the model reads it on every call. It used to restate the snippet rule
+    # and explain the verification step, which made the rule appear three times (here, in the
+    # field description below, and in the system prompt) and told the model about our
+    # internals. The rule now lives once, in prompts.SNIPPET_INSTRUCTION.
 
     value: str | None = Field(
         default=None,
@@ -64,23 +64,24 @@ class ExtractedField(BaseModel):
     )
     snippet: str | None = Field(
         default=None,
-        description="The exact, verbatim span of source text this value was quoted from, "
-        "copied character for character from the document. Do not paraphrase, summarise or "
-        "correct it. Null if the value is not present or cannot be backed by a direct quote.",
+        description="The exact span of the document the value was read from, or null.",
     )
 
 
 class LineItem(BaseModel):
-    """One row of an invoice.
+    """One row of an invoice."""
 
-    Each cell keeps its own snippet, the same way a top level field does, so a single line
-    item can be verified independently of the invoice total.
-    """
-
+    # Each cell keeps its own snippet, the same way a top level field does, so a single line
+    # item can be verified independently of the invoice total.
     description: ExtractedField = Field(default_factory=ExtractedField)
     quantity: ExtractedField = Field(default_factory=ExtractedField)
-    unit_price: ExtractedField = Field(default_factory=ExtractedField)
-    amount: ExtractedField = Field(default_factory=ExtractedField)
+    unit_price: ExtractedField = Field(
+        default_factory=ExtractedField,
+        description="Price per unit. Null unless the invoice has its own unit price column.",
+    )
+    amount: ExtractedField = Field(
+        default_factory=ExtractedField, description="The row's total amount."
+    )
 
 
 class ClaimFormExtraction(BaseModel):
@@ -181,7 +182,11 @@ class InvoiceExtraction(BaseModel):
     )
     policy_number: ExtractedField = Field(
         default_factory=ExtractedField,
-        description="The insurance policy or claim reference this invoice relates to, if any.",
+        # "policy or claim reference ... if any" was loose enough that a repair order number,
+        # RO-2026-40217, was filed here on a real invoice and then failed the policy number
+        # format rule. A description says what the field is, and what it is not.
+        description="The insurance policy number printed on the invoice. Null if there is "
+        "none. An order, job or repair number is not a policy number.",
     )
     line_items: list[LineItem] = Field(
         default_factory=list,
@@ -195,8 +200,7 @@ class InvoiceExtraction(BaseModel):
     )
     total_amount: ExtractedField = Field(
         default_factory=ExtractedField,
-        description="The final total amount due on the invoice. Checked deterministically "
-        "against the sum of the line items.",
+        description="The final total amount due on the invoice.",
     )
 
 

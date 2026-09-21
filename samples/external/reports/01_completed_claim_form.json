@@ -1,67 +1,67 @@
 {
   "document_id": "01_completed_claim_form",
-  "generated_at": "2026-09-21T11:14:12Z",
+  "generated_at": "2026-09-21T11:27:02Z",
   "document_type": "claim_form",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is a motor claim form that includes details about the claimant, policy, incident, and a declaration, indicating it is intended for submitting an insurance claim."
+    "notes": "The document is identified as a claim form due to its structure and content, which includes sections for claimant details, incident information, and a declaration related to a motor vehicle claim."
   },
   "outcome": "COMPLETE",
-  "summary": "The document is a completed claim form submitted by a claimant following an incident where a delivery van reversed into their parked vehicle, causing damage to the rear bumper, tail light, and parking sensors. The incident occurred on a specific date in August 2026, and the claim was filed shortly thereafter. The claimant has provided their contact information, including an address, phone number, and email, along with a claimed amount for the damages. There are no missing pieces of information or additional observations noted in the document.",
+  "summary": "The processed document is a claim form with the outcome marked as complete. It includes a policy number and a claim reference number. The claimant's name, address, phone number, and email are masked for privacy. The incident occurred on August 19, 2026, and the claim was filed three days later on August 22, 2026. The incident involved a delivery van reversing into the claimant's parked vehicle, resulting in damage to the rear bumper, tail light, and parking sensors. The location of the incident is also masked. The claimant is seeking a total of 2,845.60 in damages. There is no missing information or additional observations noted in the document.",
   "extracted": {
     "policy_number": {
       "value": "POL-123456",
-      "snippet": "Policy number\nPOL-123456",
+      "snippet": "POL-123456",
       "verified": true
     },
     "claim_reference": {
       "value": "CLM-2026-17420",
-      "snippet": "Claim reference\nCLM-2026-17420",
+      "snippet": "CLM-2026-17420",
       "verified": true
     },
     "claimant_name": {
       "value": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
-      "snippet": "Claimant name\n\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
       "verified": true
     },
     "claimant_address": {
       "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
-      "snippet": "Address\n\u2022\u2022 \u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
       "verified": true
     },
     "claimant_phone": {
       "value": "+\u2022\u2022\u2022 \u2022\u2022\u2022 0147",
-      "snippet": "Phone\n+\u2022\u2022\u2022 \u2022\u2022\u2022 0147",
+      "snippet": "+\u2022\u2022\u2022 \u2022\u2022\u2022 0147",
       "verified": true
     },
     "claimant_email": {
       "value": "\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022",
-      "snippet": "Email\n\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022\u2022@\u2022\u2022\u2022\u2022\u2022\u2022\u2022.\u2022\u2022\u2022",
       "verified": true
     },
     "date_of_incident": {
       "value": "2026-08-19",
-      "snippet": "Date of incident\n2026-08-19",
+      "snippet": "2026-08-19",
       "verified": true
     },
     "date_filed": {
       "value": "2026-08-22",
-      "snippet": "Date filed\n2026-08-22",
+      "snippet": "2026-08-22",
       "verified": true
     },
     "incident_description": {
       "value": "A delivery van reversed into my parked vehicle, damaging the rear bumper, tail light, and parking sensors.",
-      "snippet": "Description\nA delivery van reversed into my parked vehicle, damaging the rear bumper, tail light, and parking sensors.",
+      "snippet": "A delivery van reversed into my parked vehicle, damaging the rear bumper, tail light, and parking sensors.",
       "verified": true
     },
     "incident_location": {
       "value": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
-      "snippet": "Incident location\n\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022 \u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022",
       "verified": true
     },
     "claimed_amount": {
       "value": "2,845.60",
-      "snippet": "Claimed amount\n2,845.60",
+      "snippet": "2,845.60",
       "verified": true
     }
   },
@@ -78,13 +78,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1776,
+      "duration_ms": 1382,
       "detail": null
     },
     {
       "node": "extract_claim",
       "status": "ok",
-      "duration_ms": 4498,
+      "duration_ms": 2954,
       "detail": null
     },
     {
@@ -96,7 +96,7 @@
     {
       "node": "mask_pii",
       "status": "ok",
-      "duration_ms": 1,
+      "duration_ms": 0,
       "detail": null
     }
   ]
