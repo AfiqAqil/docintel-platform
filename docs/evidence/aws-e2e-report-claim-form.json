@@ -1,0 +1,103 @@
+{
+  "document_id": "f50f668e-cb93-4055-846d-0cd56ed33c65",
+  "generated_at": "2026-09-21T09:15:59Z",
+  "document_type": "claim_form",
+  "classification": {
+    "confidence": 1.0,
+    "notes": "The document is an insurance claim form containing details about an incident, claimant information, and the claimed amount, which fits the description of a claim form."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The document is a complete claim form related to a water damage incident resulting from a kitchen pipe burst, which affected the flooring and cabinets. The claim was filed shortly after the incident occurred, and it details the claimed amount for damages. No missing information or additional observations were noted in the processing of this claim.",
+  "extracted": {
+    "policy_number": {
+      "value": "POL-004821",
+      "snippet": "Policy Number: POL-004821",
+      "verified": true
+    },
+    "claim_reference": {
+      "value": "CLM-2026-00931",
+      "snippet": "Claim Reference: CLM-2026-00931",
+      "verified": true
+    },
+    "claimant_name": {
+      "value": "••••• •••••••",
+      "snippet": "Claimant Name: ••••• •••••••",
+      "verified": true
+    },
+    "claimant_address": {
+      "value": "•• •••••••• ••••, •••••••••• ••• •••",
+      "snippet": "Claimant Address: •• •••••••• ••••, •••••••••• ••• •••",
+      "verified": true
+    },
+    "claimant_phone": {
+      "value": "+•• •••• ••0123",
+      "snippet": "Claimant Phone: +•• •••• ••0123",
+      "verified": true
+    },
+    "claimant_email": {
+      "value": "•••••.•••••••@•••••••.•••",
+      "snippet": "Claimant Email: •••••.•••••••@•••••••.•••",
+      "verified": true
+    },
+    "date_of_incident": {
+      "value": "2026-06-02",
+      "snippet": "Date of Incident: 2026-06-02",
+      "verified": true
+    },
+    "date_filed": {
+      "value": "2026-06-10",
+      "snippet": "Date Filed: 2026-06-10",
+      "verified": true
+    },
+    "incident_description": {
+      "value": "Kitchen pipe burst causing water damage to flooring and cabinets.",
+      "snippet": "Incident Description: Kitchen pipe burst causing water damage to flooring and cabinets.",
+      "verified": true
+    },
+    "incident_location": {
+      "value": "•• •••••••• ••••, ••••••••••",
+      "snippet": "Incident Location: •• •••••••• ••••, ••••••••••",
+      "verified": true
+    },
+    "claimed_amount": {
+      "value": "3250.00",
+      "snippet": "Claimed Amount: 3250.00",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 7,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 4785,
+      "detail": null
+    },
+    {
+      "node": "extract_claim",
+      "status": "ok",
+      "duration_ms": 4746,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

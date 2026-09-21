@@ -1,0 +1,46 @@
+# ECS services after apply
+------------------------------------------------------------------------------------------------------------------------------------
+|                                                         DescribeServices                                                         |
++---------+------------+----------+-----------+------------------------------------------------------------------------------------+
+| desired |  rollout   | running  |  service  |                                      taskdef                                       |
++---------+------------+----------+-----------+------------------------------------------------------------------------------------+
+|  1      |  COMPLETED |  1       |  frontend |  arn:aws:ecs:ap-southeast-1:277707137200:task-definition/docintel-dev-frontend:1   |
+|  1      |  COMPLETED |  1       |  backend  |  arn:aws:ecs:ap-southeast-1:277707137200:task-definition/docintel-dev-backend:1    |
+|  1      |  COMPLETED |  1       |  worker   |  arn:aws:ecs:ap-southeast-1:277707137200:task-definition/docintel-dev-worker:1     |
++---------+------------+----------+-----------+------------------------------------------------------------------------------------+
+
+# Load balancer target health (frontend only, the API and the worker have no target group)
+-----------------------------------
+|      DescribeTargetHealth       |
++------+-----------+--------------+
+| port |   state   |   target     |
++------+-----------+--------------+
+|  8080|  healthy  |  10.0.11.47  |
++------+-----------+--------------+
+
+# Private DNS: the records Cloud Map keeps for api.docintel.internal
+-----------------------------------
+|      ListHostedZonesByName      |
++----------+----------------------+
+|  private |        zone          |
++----------+----------------------+
+|  True    |  docintel.internal.  |
++----------+----------------------+
+---------------------------------------------------------
+|                ListResourceRecordSets                 |
++-------------------------+------+-------+--------------+
+|          name           | ttl  | type  |    value     |
++-------------------------+------+-------+--------------+
+|  api.docintel.internal. |  10  |  A    |  10.0.10.35  |
++-------------------------+------+-------+--------------+
+
+# Subnets the tasks run in, and whether each route table has an internet route
+--------------------------------------------------
+|               DescribeRouteTables              |
++------------------------+-----------------------+
+|    default_route_via   |         table         |
++------------------------+-----------------------+
+|  None                  |  docintel-dev-app     |
+|  nat-0debf7b6037f46f5b |  docintel-dev-worker  |
+|  igw-04cac5de33d766e72 |  docintel-dev-public  |
++------------------------+-----------------------+

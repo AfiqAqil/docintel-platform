@@ -76,8 +76,11 @@ resource "aws_service_discovery_service" "this" {
     }
   }
 
-  # ECS reports task health to Cloud Map, so an unhealthy task drops out of DNS.
-  health_check_custom_config {}
+  # No Cloud Map health check block. ECS adds a task's address when the task starts and
+  # removes it when the task stops, and a task that fails its container health check is
+  # stopped and replaced by ECS, which removes it from DNS the same way. An empty
+  # health_check_custom_config block is not persisted by the provider, so declaring one made
+  # every later plan want to replace this service.
 }
 
 resource "aws_ecs_service" "this" {
