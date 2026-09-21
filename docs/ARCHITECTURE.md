@@ -506,7 +506,7 @@ Bedrock permissions at all.
 | **Stuck rows** | A worker that dies on every attempt sends the message to the DLQ without anyone writing a status. A reaper statement in the poll loop sweeps rows left in `PROCESSING` with a lease expired well past the redrive window, and rows left in `UPLOADING` past the presigned POST expiry. The second sweep is a guess about a user who walked away, so it writes `EXPIRED`, which a later S3 event can still override |
 | **Recovery after interruption** | If a worker dies mid-graph, the message reappears after the visibility timeout, the lease has expired, and the graph re-runs from the start. Re-running a handful of model calls is cheaper than operating a checkpoint store |
 | **Traceability** | `document_id` is the correlation id in every log line across all three services, and it is the S3 key. S3 event notifications cannot carry custom message attributes, so the consumer parses the id from the key and puts it into the logging context for the whole message lifetime. The per-node `trace` is persisted with the report |
-| **Independent scaling** | The API scales on CPU and request count. The worker uses step scaling on `ApproximateNumberOfMessagesVisible`, so a burst of uploads adds workers and never slows intake |
+| **Independent scaling** | The API scales on average CPU with target tracking. Request count is not available to it, because request count is a load balancer metric and the API deliberately has no target group. The worker uses step scaling on `ApproximateNumberOfMessagesVisible`, so a burst of uploads adds workers and never slows intake |
 
 ---
 
@@ -643,16 +643,17 @@ infra/
                       # optional Cloud Map registration (the API only)
   network.tf          # VPC, app and worker subnets with separate route tables,
                       # optional NAT gateway (worker route table only),
-                      # security groups, VPC endpoints,
-                      # Cloud Map private DNS namespace
+                      # VPC endpoints, Cloud Map private DNS namespace
+  security_groups.tf  # six groups. Every rule is its own resource and names one source
   data.tf             # S3, RDS, SQS + DLQ
-  ecs.tf              # cluster + three ecs_service module calls
+  ecs.tf              # cluster, three ecs_service module calls, worker step scaling
   alb.tf              # load balancer, listener, target group
   iam.tf              # task roles, least privilege per service. The worker gets Bedrock
                       # permissions or the OpenAI secret, never both
-  variables.tf outputs.tf
+  versions.tf variables.tf outputs.tf
   envs/
     dev.tfvars  dev.backend.hcl
+    dev.local.tfvars.example   # allowed_cidrs. The real file is gitignored
     prod.tfvars.example
 ```
 

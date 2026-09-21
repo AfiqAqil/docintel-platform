@@ -1,0 +1,20 @@
+# What production would set differently. Not applied in this exercise.
+
+environment    = "prod"
+aws_account_id = "000000000000"
+
+interface_endpoint_az_count = 2
+destroyable                 = false
+db_instance_class           = "db.t4g.medium"
+db_multi_az                 = true
+log_retention_days          = 90
+
+llm_provider = "bedrock"
+llm_model_id = "apac.amazon.nova-pro-v1:0"
+enable_nat   = false
+
+services = {
+  frontend = { cpu = 256, memory = 512, desired_count = 2, max_count = 2 }
+  backend  = { cpu = 512, memory = 1024, desired_count = 2, max_count = 6 }
+  worker   = { cpu = 1024, memory = 2048, desired_count = 2, max_count = 10 }
+}
