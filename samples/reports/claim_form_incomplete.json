@@ -1,13 +1,13 @@
 {
   "document_id": "claim_form_incomplete",
-  "generated_at": "2026-09-21T11:13:25Z",
+  "generated_at": "2026-09-21T11:26:18Z",
   "document_type": "claim_form",
   "classification": {
-    "confidence": 1.0,
-    "notes": "The document is an insurance claim form detailing an incident, including information about the claimant and the nature of the claim."
+    "confidence": 0.95,
+    "notes": "The document is identified as a claim form due to its title and the presence of specific fields related to an insurance claim, including details about the incident and claimant."
   },
   "outcome": "INCOMPLETE",
-  "summary": "The document is a claim form that has been marked as incomplete due to missing information. The claimant reported an incident involving a burst kitchen pipe that caused water damage to flooring and cabinets, which occurred on a specific date and was filed shortly thereafter. However, the claim lacks a reference number and the amount being claimed, which are necessary for processing. The claimant's personal details, including name, address, phone number, and email, have been masked for privacy.",
+  "summary": "The processed document is a claim form related to a water damage incident caused by a burst kitchen pipe, which occurred on June 2, 2026, and was filed on June 10, 2026. The claim is associated with policy number POL-004821 and includes details about the claimant, such as their name, address, phone number, and email, all of which are masked for privacy. However, the claim is marked as incomplete due to missing information, specifically the claim reference and the claimed amount. There are no additional observations noted in the document.",
   "extracted": {
     "policy_number": {
       "value": "POL-004821",
@@ -81,13 +81,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1512,
+      "duration_ms": 1057,
       "detail": null
     },
     {
       "node": "extract_claim",
       "status": "ok",
-      "duration_ms": 2911,
+      "duration_ms": 3524,
       "detail": null
     },
     {

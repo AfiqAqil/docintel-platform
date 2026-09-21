@@ -1,13 +1,13 @@
 {
   "document_id": "policy_document",
-  "generated_at": "2026-09-21T11:14:01Z",
+  "generated_at": "2026-09-21T11:26:53Z",
   "document_type": "policy_document",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document outlines the terms and conditions of a home insurance policy, including coverage details and limits, which categorizes it as a policy document."
+    "notes": "The document outlines the terms and conditions of a home insurance policy, including coverage details and policy period, which categorizes it as a policy document."
   },
   "outcome": "COMPLETE",
-  "summary": "The document is a complete policy document for a home insurance policy issued by Quillmarsh Mutual Assurance, which outlines coverage for the specified property and its contents, subject to certain limits and exclusions. The policy is dated January 1, 2026, and provides coverage up to a specified monetary amount.",
+  "summary": "The processed document is a home insurance policy from Quillmarsh Mutual Assurance, identified by the reference number POL-004821, effective from January 1, 2026. The policy offers coverage for the specified property and its contents, with a total monetary coverage amount of 250,000.00, while also outlining certain limits and exclusions in the accompanying schedule. There are no missing pieces of information or additional observations noted in the document.",
   "extracted": {
     "document_title": {
       "value": "Quillmarsh Mutual Assurance - Home Insurance Policy",
@@ -26,12 +26,12 @@
     },
     "date": {
       "value": "2026-01-01",
-      "snippet": "Policy period: 2026-01-01 to 2026-12-31.",
+      "snippet": "2026-01-01",
       "verified": true
     },
     "monetary_amount": {
       "value": "250,000.00",
-      "snippet": "Buildings\n250,000.00",
+      "snippet": "250,000.00",
       "verified": true
     },
     "summary": {
@@ -53,13 +53,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1287,
+      "duration_ms": 1121,
       "detail": null
     },
     {
       "node": "extract_generic",
       "status": "ok",
-      "duration_ms": 2031,
+      "duration_ms": 2251,
       "detail": null
     },
     {

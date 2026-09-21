@@ -1,13 +1,13 @@
 {
   "document_id": "restaurant_menu",
-  "generated_at": "2026-09-21T11:14:04Z",
+  "generated_at": "2026-09-21T11:26:55Z",
   "document_type": "unknown",
   "classification": {
     "confidence": 0.9,
     "notes": null
   },
   "outcome": "UNSUPPORTED",
-  "summary": "The document could not be classified into a specific type, and as a result, it has been sent for manual review. No information was extracted from the document, and there were no missing details noted. The overall outcome of the processing was deemed unsupported.",
+  "summary": "The processed document could not be classified into a specific type and has been marked as unsupported. There is no extracted information available, and no additional information is missing. The observations indicate that the document has been sent for manual review due to the inability to determine its type.",
   "extracted": {},
   "missing_information": [],
   "validation_errors": [],
@@ -24,7 +24,7 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1293,
+      "duration_ms": 924,
       "detail": null
     },
     {

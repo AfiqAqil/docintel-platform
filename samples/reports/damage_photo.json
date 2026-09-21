@@ -1,13 +1,13 @@
 {
   "document_id": "damage_photo",
-  "generated_at": "2026-09-21T11:13:41Z",
+  "generated_at": "2026-09-21T11:26:35Z",
   "document_type": "supporting_evidence",
   "classification": {
     "confidence": 0.95,
     "notes": null
   },
   "outcome": "COMPLETE",
-  "summary": "The document is a supporting piece of evidence consisting of a photograph that depicts damage at the scene, taken by the policyholder. It is categorized as complete, but since it is an image-only document, there was no opportunity for snippet verification against source text, leaving the extraction unverified. There are no related parties or monetary amounts mentioned, and no missing information was identified.",
+  "summary": "The processed document is titled \"SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH\" and has a reference number of CLM-2026-00931. It was created on June 2, 2026, and contains a photograph taken by the policyholder that shows impact damage on the front nearside panel of a vehicle. There is no monetary amount associated with this document, and it has been noted that the document is an image only, which means that verification of the evidence snippets against source text could not be performed. As a result, the extraction of information from the image remains unverified.",
   "extracted": {
     "document_title": {
       "value": "SUPPORTING EVIDENCE - DAMAGE PHOTOGRAPH",
@@ -35,7 +35,7 @@
       "verified": null
     },
     "summary": {
-      "value": "Photograph of damage taken at the scene by the policyholder.",
+      "value": "Photograph of the front nearside panel showing impact damage, taken at the scene by the policyholder.",
       "snippet": "Photograph 1 of 1. Front nearside panel, taken at the scene by the policyholder.",
       "verified": null
     }
@@ -50,19 +50,19 @@
     {
       "node": "load_document",
       "status": "ok",
-      "duration_ms": 17,
+      "duration_ms": 19,
       "detail": null
     },
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1120,
+      "duration_ms": 1510,
       "detail": null
     },
     {
       "node": "extract_generic",
       "status": "ok",
-      "duration_ms": 2792,
+      "duration_ms": 2247,
       "detail": null
     },
     {

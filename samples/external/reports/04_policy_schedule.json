@@ -1,13 +1,13 @@
 {
   "document_id": "04_policy_schedule",
-  "generated_at": "2026-09-21T11:14:34Z",
+  "generated_at": "2026-09-21T11:27:20Z",
   "document_type": "policy_document",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is a policy schedule that outlines the coverage details, terms, and conditions of an insurance policy, indicating it is a policy document."
+    "notes": "The document contains details about an insurance policy schedule, including coverage information and terms, which categorizes it as a policy document."
   },
   "outcome": "COMPLETE",
-  "summary": "The processed document is a policy schedule that confirms the selected coverage for a related party, with a monetary amount specified. The document is complete and dated September 2, 2026. No missing information or additional observations were noted.",
+  "summary": "The processed document is a policy schedule titled \"Policy Schedule\" with the reference number POL-807214, dated September 2, 2026. It confirms the selected coverage for a related party, with a monetary amount of 350,000.00. There are no missing information or observations noted in the document.",
   "extracted": {
     "document_title": {
       "value": "Policy Schedule",
@@ -16,22 +16,22 @@
     },
     "reference_number": {
       "value": "POL-807214",
-      "snippet": "Policy number\nPOL-807214",
+      "snippet": "POL-807214",
       "verified": true
     },
     "related_party_name": {
       "value": "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
-      "snippet": "This schedule confirms the selected cover for \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022.",
+      "snippet": "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
       "verified": true
     },
     "date": {
       "value": "2026-09-02",
-      "snippet": "Authorised by: ______________________________    Date: 2026-09-02",
+      "snippet": "Date: 2026-09-02",
       "verified": true
     },
     "monetary_amount": {
       "value": "350,000.00",
-      "snippet": "Buildings and permanent fixtures\n350,000.00",
+      "snippet": "350,000.00",
       "verified": true
     },
     "summary": {
@@ -47,19 +47,19 @@
     {
       "node": "load_document",
       "status": "ok",
-      "duration_ms": 8,
+      "duration_ms": 7,
       "detail": null
     },
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1250,
+      "duration_ms": 989,
       "detail": null
     },
     {
       "node": "extract_generic",
       "status": "ok",
-      "duration_ms": 2355,
+      "duration_ms": 1452,
       "detail": null
     },
     {

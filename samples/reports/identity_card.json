@@ -1,13 +1,13 @@
 {
   "document_id": "identity_card",
-  "generated_at": "2026-09-21T11:13:47Z",
+  "generated_at": "2026-09-21T11:26:40Z",
   "document_type": "identity_document",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is a national identity card containing personal information such as name, date of birth, identity number, and issuing authority, which classifies it as an identity document."
+    "notes": "The document is an identity card containing personal identification information such as name, date of birth, and identity number."
   },
   "outcome": "COMPLETE",
-  "summary": "The processed document is a National Identity Card belonging to an individual of Avantian nationality. The card includes the person's full name, date of birth, identity number, address, issue date, and expiry date, all of which have been masked for privacy. The issuing authority is the Avantia Department of Identity Services. However, it is noted that the document was provided as an image only, which prevented verification of the extracted information against source text, leaving the extraction unverified.",
+  "summary": "The processed document is a National Identity Card for an individual from Avantia, with a complete outcome. The card includes the person's full name, date of birth, identity number, nationality, address, issue date, expiry date, and the issuing authority. However, the document is an image only, which means that verification against source text could not be performed, and the extraction of information remains unverified. There are no missing pieces of information noted.",
   "extracted": {
     "document_type": {
       "value": "National Identity Card",
@@ -16,42 +16,42 @@
     },
     "full_name": {
       "value": "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
-      "snippet": "Full Name: \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
       "verified": null
     },
     "date_of_birth": {
       "value": "\u2022\u2022\u2022\u2022-\u2022\u2022-\u2022\u2022",
-      "snippet": "Date of Birth: \u2022\u2022\u2022\u2022-\u2022\u2022-\u2022\u2022",
+      "snippet": "\u2022\u2022\u2022\u2022-\u2022\u2022-\u2022\u2022",
       "verified": null
     },
     "identity_number": {
       "value": "\u2022\u2022\u2022\u2022\u20224321",
-      "snippet": "Identity Number: \u2022\u2022\u2022\u2022\u20224321",
+      "snippet": "\u2022\u2022\u2022\u2022\u20224321",
       "verified": null
     },
     "nationality": {
       "value": "Avantian",
-      "snippet": "Nationality: Avantian",
+      "snippet": "Avantian",
       "verified": null
     },
     "address": {
       "value": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
-      "snippet": "Address: \u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
+      "snippet": "\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022, \u2022\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022",
       "verified": null
     },
     "issue_date": {
       "value": "2022-01-10",
-      "snippet": "Issue Date: 2022-01-10",
+      "snippet": "2022-01-10",
       "verified": null
     },
     "expiry_date": {
       "value": "2032-01-10",
-      "snippet": "Expiry Date: 2032-01-10",
+      "snippet": "2032-01-10",
       "verified": null
     },
     "issuing_authority": {
       "value": "Avantia Department of Identity Services",
-      "snippet": "Issuing Authority: Avantia Department of Identity Services",
+      "snippet": "Avantia Department of Identity Services",
       "verified": null
     }
   },
@@ -65,19 +65,19 @@
     {
       "node": "load_document",
       "status": "ok",
-      "duration_ms": 15,
+      "duration_ms": 14,
       "detail": null
     },
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1278,
+      "duration_ms": 1697,
       "detail": null
     },
     {
       "node": "extract_identity",
       "status": "ok",
-      "duration_ms": 2725,
+      "duration_ms": 2371,
       "detail": null
     },
     {
