@@ -1086,6 +1086,39 @@ delegation list, and the pull request workflow was small enough to write alongsi
 
 ---
 
+## Phase 11: the README, and a last pass over the documents
+
+**Built.** `README.md`, written for an engineer who has never seen this repository: run it
+locally, run the tests, provision it on AWS in six numbered steps, deploy through the
+pipeline, switch LLM mode, and tear it down, including the bootstrap stack and the one extra
+step its state needs. It lists the values that are specific to an AWS account and a GitHub
+repository, so nobody has to find them by failing. It also maps every documentation item the
+assignment lists to the section that covers it.
+
+**Verified by running it, not by reading it.** The test section was executed exactly as
+written, against the compose PostgreSQL, from a fresh checkout:
+
+```
+backend   14 passed    ruff clean   mypy clean
+worker    100 passed   ruff clean   mypy clean
+frontend  built
+```
+
+The provisioning steps are the commands that were actually used to stand the environment up
+in phases 9 and 10, with the account specific values replaced by placeholders. The bootstrap
+first run and teardown procedures are the ones written at the top of
+`infra/bootstrap/backend.tf`.
+
+**One stale claim corrected.** `ARCHITECTURE.md` section 9 listed five outputs. The main stack
+has twelve and the bootstrap stack five, several of which exist because the deploy pipeline's
+checks read them, so the row now says what is really there.
+
+**Every deliverable the assignment lists is present**: the three applications, the LangGraph
+implementation, the Terraform, three Dockerfiles, both workflows, eleven synthetic documents
+with a real report for each, the architecture diagrams, the documentation, and this README.
+
+---
+
 ## The Bedrock quota block: what is known, and what was decided
 
 Recorded here because it decides how the platform is deployed, and because the facts are
