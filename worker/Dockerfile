@@ -4,22 +4,24 @@
 # and calls a model. It gets more CPU and memory in the task definition for the same reason.
 FROM python:3.12-slim AS builder
 
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+# uv is used in the builder only, to install exactly what uv.lock pins. Two builds of the same
+# commit therefore ship the same library versions, which a range in pyproject.toml alone
+# does not guarantee. The runtime stage never sees uv.
+COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /bin/uv
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
 
 WORKDIR /build
 
-COPY pyproject.toml ./
-RUN python -m venv /opt/venv \
- && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
- && /opt/venv/bin/pip install .
-
-COPY consumer ./consumer
-COPY graph ./graph
-COPY llm ./llm
-COPY rules ./rules
-COPY config.py ./
-RUN /opt/venv/bin/pip install --no-deps .
+# Dependencies only, in their own layer, so a code change does not reinstall them.
+# --frozen fails the build if uv.lock is out of step with pyproject.toml.
+# The application itself is not installed as a package: the runtime stage copies the
+# source into /app and runs it from there.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 
 FROM python:3.12-slim AS runtime

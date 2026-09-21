@@ -39,7 +39,11 @@ def configure() -> logging.Logger:
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(
-        JsonFormatter("%(asctime)s %(levelname)s %(name)s %(document_id)s %(message)s")
+        # The offset is explicit so a reader never has to guess which zone a line is in.
+        JsonFormatter(
+            "%(asctime)s %(levelname)s %(name)s %(document_id)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+        )
     )
     handler.addFilter(DocumentIdFilter())
 

@@ -679,7 +679,7 @@ running image is visible in state. The trade-off is in [section 14](#14-architec
 |---|---|
 | Launch type | Fargate. No node pool to run for three small services |
 | Task sizing | Frontend and API 0.25 vCPU / 0.5 GB. Worker 0.5 vCPU / 1 GB, because PDF rendering and model calls dominate |
-| Images | Multi-stage builds, non-root user, `python:3.12-slim` and `nginx-unprivileged` bases, dependencies installed in a cached layer before app code |
+| Images | Multi-stage builds, non-root user, `python:3.12-slim` and `nginx-unprivileged` bases, dependencies installed in a cached layer before app code. Python dependencies are installed from a committed `uv.lock` with `uv sync --frozen` in the builder stage, and the frontend from `package-lock.json` with `npm ci`, so two builds of one commit ship identical library versions. `uv` never reaches the runtime image |
 | Ports | The frontend listens on **8080**, because `nginx-unprivileged` cannot bind 80 as a non-root user. The ALB target group points at 8080 |
 | Tags | Immutable, tagged with the git SHA. `latest` is never deployed |
 | Configuration | Environment variables per environment from the task definition |

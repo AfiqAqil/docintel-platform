@@ -124,7 +124,18 @@ export function ReportView({ doc }: Props): JSX.Element {
     );
   }
 
-  const fields = Object.entries(report.extracted);
+  // A repeating group is flattened into one table row per cell, named like
+  // `line_items[1].amount`, so each cell shows its own value, verification and snippet.
+  // Rendering the list as a single row showed a blank value and mislabelled it as image only.
+  const fields = Object.entries(report.extracted).flatMap(([name, field]) =>
+    Array.isArray(field)
+      ? field.flatMap((row, i) =>
+          Object.entries(row).map(
+            ([cell, cellField]) => [`${name}[${i + 1}].${cell}`, cellField] as const,
+          ),
+        )
+      : [[name, field] as const],
+  );
 
   return (
     <div className="report-view">

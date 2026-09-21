@@ -76,7 +76,9 @@ export type Report = {
   classification: { confidence: number; notes: string };
   outcome: DocumentOutcome;
   summary: string;
-  extracted: Record<string, ExtractedField>;
+  // Most fields are one cell. A repeating group, such as an invoice's line items, is a list
+  // of rows where every cell is itself a field with its own evidence snippet.
+  extracted: Record<string, ExtractedField | Record<string, ExtractedField>[]>;
   missing_information: string[];
   validation_errors: string[];
   observations: string[];

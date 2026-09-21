@@ -596,6 +596,38 @@ Both agents' output built together on the first attempt. The API contract they c
 was generated from the running backend and committed first, so neither had to guess at the
 other side's shape.
 
+## Phases 7 and 8: the local end to end stack, and the Dockerfiles
+
+**Built, together and on purpose.** `docker-compose.yml` runs the whole platform locally:
+LocalStack for S3 and SQS, PostgreSQL, and the three services. The Dockerfiles were pulled
+forward from phase 8 so that compose builds the same images that get deployed. A compose file
+that ran the services some other way would have proved something other than what ships.
+
+| Image | Base | Notes |
+|---|---|---|
+| `worker` | `python:3.12-slim` | No entrypoint wrapper, so the process is PID 1 and SIGTERM from ECS reaches it. The health check reads a timestamp the poll loop writes, because a liveness check passes for a wedged loop |
+| `backend` | `python:3.12-slim` | Runs Alembic at startup under an advisory lock. `curl` is present only for the container health check, since the API has no target group |
+| `frontend` | `nginx-unprivileged:1.27-alpine` | Listens on 8080. `/healthz` is served by nginx itself, so it does not fail when the backend is down |
+
+All three are multi stage, arm64, run as a non root user, and install dependencies in their
+own layer before application code is copied.
+
+**Verified.** Every sample was driven through the running stack from the browser upload to
+the stored report, with nothing in the path stubbed. The output is committed under
+`docs/evidence/`: the outcome of each document, the worker's structured logs with
+`document_id` bound per message, and one complete report as stored in S3.
+
+**Two fixes the real run surfaced, which no unit test could have found.**
+
+1. `current_step` was written by the heartbeat, which beats every 30 seconds. Documents
+   finish well inside that, so the progress the frontend promises never appeared. It is now
+   written as each node completes, through its own fenced statement, so that reporting
+   progress cannot renew a lease as a side effect.
+2. The report view labelled every unverified field as image only input. A field with no value
+   was never extracted, so there was nothing to check. The two cases are now told apart.
+
+---
+
 ## Review fix: the report and the status are one step
 
 A review on PR 5 found the last unguarded gap in the at-least-once story, and it was a real
@@ -722,3 +754,51 @@ sustained outage every delivery now fails, so messages reach the dead letter que
 redrive limit instead of waiting in the queue for a restarted task. That is still the better
 trade: the DLQ alarm makes the outage visible and `StartMessageMoveTask` redrives the
 messages in one call, whereas a crash loop is silent until someone reads the service events.
+
+---
+
+## Review fix: reproducible images, and four smaller findings
+
+An external review of phases 1 to 8 on `main` re-ran every check independently (100 worker
+tests, 14 backend tests, lint, types, the frontend build, and a real upload through the
+running stack) and found the following. All are fixed in one change.
+
+**1. Python dependencies were not locked.** Both Dockerfiles ran `pip install .` against the
+`>=` ranges in `pyproject.toml`, and `uv.lock` was gitignored, so two builds of one commit
+could ship different library versions. The assignment asks for appropriate container build
+practices and reproducible deployment, and this was the one place phases 1 to 8 fell short.
+Both lock files are now committed, and the builder stage installs with
+`uv sync --frozen --no-dev --no-install-project`. `--frozen` fails the build if the lock is
+out of step with `pyproject.toml`. `uv` is copied into the builder only and is absent from
+the runtime image, which was checked rather than assumed. The application is no longer
+installed as a package, because the runtime stage already runs it from source in `/app`.
+Side effect: the images shrank, worker 606 MB to 508 MB and backend 427 MB to 368 MB as
+reported by `docker images`.
+
+`.terraform.lock.hcl` was also gitignored. It pins provider versions and checksums and is
+meant to be committed, so it is no longer ignored ahead of phase 9.
+
+**2. The report view rendered a repeating group as one blank row.** An invoice's
+`line_items` is a list of rows whose cells each carry their own snippet. The table showed an
+empty value and the label "image only input" for a text PDF, which is wrong twice. The view
+now flattens a repeating group into one row per cell, named like `line_items[1].amount`.
+Verified in a browser against a real report: 25 rows, every line item cell `Verified`.
+
+**3. Log timestamps carried no zone.** Worker lines read `2026-09-20 23:21:28` with no
+offset, and backend lines had no timestamp at all. Both now emit ISO 8601 with an explicit
+offset.
+
+**4. Three backend tests had no type annotations**, which failed `mypy` and would have failed
+the phase 10 CI job. Annotated. `mypy` is clean on both services.
+
+**5. This log had no entry for phases 7 and 8.** Added above.
+
+**Verified after the change.**
+
+```
+backend:  14 passed   ruff clean   mypy clean
+worker:   100 passed  ruff clean   mypy clean
+frontend: tsc --noEmit && vite build, clean
+images:   worker and backend build from uv.lock, import their code, alembic present,
+          uv absent from the runtime stage
+```

@@ -144,7 +144,7 @@ def test_healthz_survives_dead_database(
     assert response.status_code == 200
 
 
-def test_a_negative_size_is_rejected(client):
+def test_a_negative_size_is_rejected(client: TestClient) -> None:
     """A negative size passed both the schema and the endpoint's upper bound check, so a row
     could be created with impossible metadata while S3 went on to accept a real object."""
     response = client.post(
@@ -154,7 +154,7 @@ def test_a_negative_size_is_rejected(client):
     assert response.status_code == 422
 
 
-def test_an_empty_file_is_rejected(client):
+def test_an_empty_file_is_rejected(client: TestClient) -> None:
     """An empty file is not a document. Accepting one only creates a row that can do nothing
     but fail later, so it is refused at intake."""
     response = client.post(
@@ -164,7 +164,7 @@ def test_an_empty_file_is_rejected(client):
     assert response.status_code == 422
 
 
-def test_the_database_refuses_a_non_positive_size_too(db_session):
+def test_the_database_refuses_a_non_positive_size_too(db_session: Session) -> None:
     """Validation at the edge is not a guarantee about the table.
 
     Anything writing to it that is not the API, a fix applied by hand, a future service, is
