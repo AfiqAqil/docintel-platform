@@ -1086,6 +1086,66 @@ delegation list, and the pull request workflow was small enough to write alongsi
 
 ---
 
+## Phase 11: the README, and a last pass over the documents
+
+**Built.** `README.md`, written for an engineer who has never seen this repository: run it
+locally, run the tests, provision it on AWS in six numbered steps, deploy through the
+pipeline, switch LLM mode, and tear it down, including the bootstrap stack and the one extra
+step its state needs. It lists the values that are specific to an AWS account and a GitHub
+repository, so nobody has to find them by failing. It also maps every documentation item the
+assignment lists to the section that covers it.
+
+**Verified by running it, not by reading it.** The test section was executed exactly as
+written, against the compose PostgreSQL, from a fresh checkout:
+
+```
+backend   14 passed    ruff clean   mypy clean
+worker    100 passed   ruff clean   mypy clean
+frontend  built
+```
+
+The provisioning steps are the commands that were actually used to stand the environment up
+in phases 9 and 10, with the account specific values replaced by placeholders. The bootstrap
+first run and teardown procedures are the ones written at the top of
+`infra/bootstrap/backend.tf`.
+
+**An external review found that the provisioning steps could not be followed as written.**
+Step 1 changed into `infra/bootstrap` and never came back, while steps 2 to 4 assumed the
+repository root, so `./.env`, `./frontend` and `infra/envs/...` all resolved to paths that do
+not exist. The teardown had the same flaw, ending in `infra` and then changing into
+`infra/bootstrap` from there. The test section had been run verbatim and the provisioning
+section had not, because its commands were lifted from a session that happened to be in the
+right directory each time, which is exactly the assumption a reader cannot share.
+
+Every command now runs from the repository root, using `terraform -chdir`, and the README
+says so once at the top of the section. Then the read only commands were run as written,
+from the root, in a worktree where Terraform had never been initialised:
+
+```
+terraform -chdir=infra/bootstrap init -backend-config=backend.hcl   initialized
+terraform -chdir=infra/bootstrap plan                               exit 0, no changes
+terraform -chdir=infra init -backend-config=envs/dev.backend.hcl    initialized
+terraform -chdir=infra plan -var-file=envs/... -out=dev.tfplan      No changes. infra/dev.tfplan written
+terraform -chdir=infra output app_url                               the load balancer URL
+describe-target-health with the target group ARN from output        healthy
+terraform -chdir=infra/bootstrap output -raw ci_plan_role_arn       the role ARN
+```
+
+That confirms the detail the rewrite depends on: with `-chdir`, the paths given to
+`-var-file`, `-backend-config` and `-out` are relative to the stack directory. The apply,
+migrate and destroy commands were not run, since they change real infrastructure, and they
+differ from the ones above only in the verb.
+
+**One stale claim corrected.** `ARCHITECTURE.md` section 9 listed five outputs. The main stack
+has twelve and the bootstrap stack five, several of which exist because the deploy pipeline's
+checks read them, so the row now says what is really there.
+
+**Every deliverable the assignment lists is present**: the three applications, the LangGraph
+implementation, the Terraform, three Dockerfiles, both workflows, eleven synthetic documents
+with a real report for each, the architecture diagrams, the documentation, and this README.
+
+---
+
 ## The Bedrock quota block: what is known, and what was decided
 
 Recorded here because it decides how the platform is deployed, and because the facts are
