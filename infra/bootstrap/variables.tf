@@ -22,7 +22,7 @@ variable "github_repository" {
 }
 
 variable "github_deploy_environment" {
-  description = "The GitHub environment the deploy job runs in. It carries a required reviewer, so the deploy role can only be assumed after a human approves the run."
+  description = "The GitHub environment the deploy jobs run in. The deploy role trusts only this environment's OIDC subject, and the environment is restricted to the main branch."
   type        = string
   default     = "dev"
 }
