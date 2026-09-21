@@ -802,3 +802,41 @@ frontend: tsc --noEmit && vite build, clean
 images:   worker and backend build from uv.lock, import their code, alembic present,
           uv absent from the runtime stage
 ```
+
+---
+
+## The Bedrock quota block: what is known, and what was decided
+
+Recorded here because it decides how the platform is deployed, and because the facts are
+easy to misremember.
+
+**Facts, each one checked rather than assumed.**
+
+- Every Amazon Bedrock Converse call on account `277707137200` fails with
+  `ThrottlingException: Too many tokens per day`. Reproduced with Amazon Nova Pro in
+  `ap-southeast-1`, `ap-northeast-1` and `us-west-2`, most recently on 2026-09-21.
+- Service Quotas shows `0` for "Model invocation max tokens per day for Amazon Nova Pro" in
+  `ap-southeast-1`, and marks that quota as not adjustable, so it cannot be raised through
+  self service. Two other regions list a large default and reject calls all the same, so the
+  listed value is not what is applied to the account.
+- The account is not in an AWS Organization, so no organization policy is involved, and a
+  valid payment method is on file.
+- One call, once, returned "Your account is currently being verified". It did not recur, and
+  AWS has not confirmed that verification is the cause. It is recorded as an observation and
+  not as the explanation.
+
+**AWS Support case 178990624000702**, opened 2026-09-20 on Basic Support.
+
+| When (Malaysia time) | What happened |
+|---|---|
+| 2026-09-20 20:10 | Case opened, contact method Web |
+| 2026-09-21 14:31 | Still `Unassigned` with no reply after about 18 hours. Follow up posted |
+| 2026-09-21 14:35 | Live chat requested on the same case |
+| 2026-09-21 14:39 to 14:45 | Agent confirmed the symptoms, asked whether the account has an Account Manager (it does not), and escalated to the Bedrock service team. Stated response time: usually 24 to 48 hours |
+
+**Decision.** The deployment does not wait for it. The platform deploys with
+`llm_provider = "openai"` and `enable_nat = true`, the documented fallback in
+`ARCHITECTURE.md` sections 6, 8 and 15. Bedrock stays the default in Terraform and stays
+fully implemented. If the quota is granted, switching back is two variable changes and no
+code change, preceded by the one Nova Pro test call the README lists as a prerequisite.
+
