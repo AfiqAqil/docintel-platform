@@ -127,6 +127,11 @@ docker compose up -d postgres            # listens on localhost:55432
 Everything is Terraform. Nothing is created by hand except one secret value, which is set by
 one CLI command so that it never enters Terraform state.
 
+**Every command below runs from the repository root.** None of them changes directory, so the
+steps can be run in order, or one at a time, without keeping track of where the shell is.
+Terraform is pointed at a stack with `-chdir`, and with `-chdir` the paths given to
+`-var-file`, `-backend-config` and `-out` are relative to that stack's directory.
+
 ### Prerequisites
 
 - An AWS account, and a CLI profile for it. The commands below use `AWS_PROFILE=docintel`
@@ -170,16 +175,16 @@ Its state lives in the bucket it creates. That is circular exactly once, on the 
 run, so the first run uses local state and then moves it in:
 
 ```bash
-cd infra/bootstrap
-mv backend.tf backend.tf.off                         # the bucket does not exist yet
-AWS_PROFILE=docintel terraform init
-AWS_PROFILE=docintel terraform apply
-mv backend.tf.off backend.tf
-AWS_PROFILE=docintel terraform init -migrate-state -backend-config=backend.hcl
+B=infra/bootstrap
+mv $B/backend.tf $B/backend.tf.off                   # the bucket does not exist yet
+AWS_PROFILE=docintel terraform -chdir=$B init
+AWS_PROFILE=docintel terraform -chdir=$B apply
+mv $B/backend.tf.off $B/backend.tf
+AWS_PROFILE=docintel terraform -chdir=$B init -migrate-state -backend-config=backend.hcl
 ```
 
 On an account that is already bootstrapped, it is just
-`terraform init -backend-config=backend.hcl`.
+`terraform -chdir=infra/bootstrap init -backend-config=backend.hcl`.
 
 ### 2. Set the OpenAI key (fallback mode only)
 
@@ -227,16 +232,16 @@ Terraform refuses an empty list and refuses `0.0.0.0/0`.
 ### 5. Apply the main stack
 
 ```bash
-cd infra
-AWS_PROFILE=docintel terraform init -backend-config=envs/dev.backend.hcl
-AWS_PROFILE=docintel terraform plan \
+TAG=$(git rev-parse --short=12 HEAD)                 # the tag pushed in step 3
+AWS_PROFILE=docintel terraform -chdir=infra init -backend-config=envs/dev.backend.hcl
+AWS_PROFILE=docintel terraform -chdir=infra plan \
   -var-file=envs/dev.tfvars -var-file=envs/dev.local.tfvars \
   -var="image_tag=$TAG" -out=dev.tfplan
-AWS_PROFILE=docintel terraform apply dev.tfplan
+AWS_PROFILE=docintel terraform -chdir=infra apply dev.tfplan
 ```
 
-About 90 resources in about six minutes, most of it RDS. `terraform output app_url` is the
-address to open.
+About 90 resources in about six minutes, most of it RDS.
+`terraform -chdir=infra output app_url` is the address to open.
 
 ### 6. Verify
 
@@ -244,7 +249,7 @@ address to open.
 aws ecs wait services-stable --cluster docintel-dev --services frontend backend worker \
   --profile docintel --region ap-southeast-1
 aws elbv2 describe-target-health --profile docintel --region ap-southeast-1 \
-  --target-group-arn "$(terraform output -raw frontend_target_group_arn)"
+  --target-group-arn "$(AWS_PROFILE=docintel terraform -chdir=infra output -raw frontend_target_group_arn)"
 ```
 
 Then open `app_url` from an allowlisted address and upload a sample. If the page does not
@@ -288,8 +293,8 @@ gh api -X PUT repos/$R/environments/dev --input - <<'EOF'
 {"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}
 EOF
 gh api -X POST repos/$R/environments/dev/deployment-branch-policies -f name=main -f type=branch
-gh variable set AWS_CI_PLAN_ROLE_ARN   -R $R --body "$(terraform -chdir=infra/bootstrap output -raw ci_plan_role_arn)"
-gh variable set AWS_CI_DEPLOY_ROLE_ARN -R $R --body "$(terraform -chdir=infra/bootstrap output -raw ci_deploy_role_arn)"
+gh variable set AWS_CI_PLAN_ROLE_ARN   -R $R --body "$(AWS_PROFILE=docintel terraform -chdir=infra/bootstrap output -raw ci_plan_role_arn)"
+gh variable set AWS_CI_DEPLOY_ROLE_ARN -R $R --body "$(AWS_PROFILE=docintel terraform -chdir=infra/bootstrap output -raw ci_deploy_role_arn)"
 gh variable set ALLOWED_CIDRS          -R $R --body '["203.0.113.10/32"]'
 ```
 
@@ -311,8 +316,7 @@ in `dev.tfvars` is what lets buckets, repositories, the database and the secret 
 and come back cleanly afterwards.
 
 ```bash
-cd infra
-AWS_PROFILE=docintel terraform destroy \
+AWS_PROFILE=docintel terraform -chdir=infra destroy \
   -var-file=envs/dev.tfvars -var-file=envs/dev.local.tfvars -var="image_tag=unused"
 ```
 
@@ -322,10 +326,10 @@ To remove the bootstrap stack as well, its state has to come back out of the buc
 since the bucket cannot hold the state of its own destruction:
 
 ```bash
-cd infra/bootstrap
-mv backend.tf backend.tf.off
-AWS_PROFILE=docintel terraform init -migrate-state
-AWS_PROFILE=docintel terraform destroy
+B=infra/bootstrap
+mv $B/backend.tf $B/backend.tf.off
+AWS_PROFILE=docintel terraform -chdir=$B init -migrate-state
+AWS_PROFILE=docintel terraform -chdir=$B destroy
 ```
 
 ---

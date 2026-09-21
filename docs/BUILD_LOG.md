@@ -1109,6 +1109,33 @@ in phases 9 and 10, with the account specific values replaced by placeholders. T
 first run and teardown procedures are the ones written at the top of
 `infra/bootstrap/backend.tf`.
 
+**An external review found that the provisioning steps could not be followed as written.**
+Step 1 changed into `infra/bootstrap` and never came back, while steps 2 to 4 assumed the
+repository root, so `./.env`, `./frontend` and `infra/envs/...` all resolved to paths that do
+not exist. The teardown had the same flaw, ending in `infra` and then changing into
+`infra/bootstrap` from there. The test section had been run verbatim and the provisioning
+section had not, because its commands were lifted from a session that happened to be in the
+right directory each time, which is exactly the assumption a reader cannot share.
+
+Every command now runs from the repository root, using `terraform -chdir`, and the README
+says so once at the top of the section. Then the read only commands were run as written,
+from the root, in a worktree where Terraform had never been initialised:
+
+```
+terraform -chdir=infra/bootstrap init -backend-config=backend.hcl   initialized
+terraform -chdir=infra/bootstrap plan                               exit 0, no changes
+terraform -chdir=infra init -backend-config=envs/dev.backend.hcl    initialized
+terraform -chdir=infra plan -var-file=envs/... -out=dev.tfplan      No changes. infra/dev.tfplan written
+terraform -chdir=infra output app_url                               the load balancer URL
+describe-target-health with the target group ARN from output        healthy
+terraform -chdir=infra/bootstrap output -raw ci_plan_role_arn       the role ARN
+```
+
+That confirms the detail the rewrite depends on: with `-chdir`, the paths given to
+`-var-file`, `-backend-config` and `-out` are relative to the stack directory. The apply,
+migrate and destroy commands were not run, since they change real infrastructure, and they
+differ from the ones above only in the verb.
+
 **One stale claim corrected.** `ARCHITECTURE.md` section 9 listed five outputs. The main stack
 has twelve and the bootstrap stack five, several of which exist because the deploy pipeline's
 checks read them, so the row now says what is really there.
