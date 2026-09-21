@@ -640,7 +640,8 @@ key, one content type, a size limit, and a five minute expiry.
 ```
 infra/
   bootstrap/          # state bucket, ECR repositories, GitHub OIDC role,
-                      # empty OpenAI key secret. Local state, run once
+                      # empty OpenAI key secret. State in the bucket it creates,
+                      # under its own key, after a first run on local state
   modules/
     ecs_service/      # task definition, service, log group, autoscaling,
                       # optional Cloud Map registration (the API only)
@@ -665,7 +666,7 @@ infra/
 | Reusable components | One module, `ecs_service`, used three times. Nothing else is repeated, so nothing else is a module |
 | Environment configuration | One root, per-environment `.tfvars` and backend files. No workspaces, no copied directories |
 | State | S3 backend with versioning, encryption and native S3 locking (`use_lockfile`). The DynamoDB lock table is deprecated |
-| Bootstrap | The state bucket cannot live in the stack it backs. **ECR lives here too**: the ECS services need an image to exist before their first deployment, so the repositories are created and the first images pushed before the main stack is ever applied. Otherwise the first `terraform apply` starts services with no image, the deployment circuit breaker trips, and the apply fails. The empty OpenAI key secret lives here for the same reason: the key must be set before the worker first starts in fallback mode |
+| Bootstrap | A separate small stack, because some things have to exist before the main stack can be applied at all. Its state lives in the bucket it creates, under `bootstrap/terraform.tfstate`. That is circular exactly once: the first apply in a new account runs on local state and the state is then moved in with `terraform init -migrate-state`, and a full teardown is the same thing backwards. `infra/bootstrap/backend.tf` carries both procedures. It is not left local because a local state file lives in one directory on one machine, and losing it means importing every resource again by hand. **ECR lives here too**: the ECS services need an image to exist before their first deployment, so the repositories are created and the first images pushed before the main stack is ever applied. Otherwise the first `terraform apply` starts services with no image, the deployment circuit breaker trips, and the apply fails. The empty OpenAI key secret lives here for the same reason: the key must be set before the worker first starts in fallback mode |
 | Configurable variables | Environment-shaped inputs are variables, not constants: `allowed_cidrs`, task sizes and desired counts, the database instance class, log retention, `llm_provider` and `llm_model_id`, both passed to the worker as environment variables, and `enable_nat`. Changing model or provider is a variable change rather than a code change |
 | Meaningful outputs | ALB URL, ECR repository URLs, queue URLs, bucket name, RDS endpoint |
 | Safety | The provider pins `allowed_account_ids`, so an apply against the wrong AWS account fails immediately. A second guard covers the LLM fallback: `llm_provider = "openai"` with `enable_nat = false` fails the plan, because that combination deploys a worker with no route to its model. The failure happens at plan time, not at runtime |

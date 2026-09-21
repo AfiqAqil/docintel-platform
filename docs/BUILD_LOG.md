@@ -954,6 +954,27 @@ worktree that first applied it. It was not applied. The state was copied across,
 became two in place updates, and the stale copy was renamed so it cannot be applied by
 mistake. The file holds no secret values.
 
+**So the bootstrap state was moved into the bucket it creates.** `ARCHITECTURE.md` said
+"local state, run once", and that turned out to be a liability rather than a simplification:
+the file was gitignored, lived in one worktree, and worktrees are deleted after a merge.
+Losing it would have broken nothing in AWS and would have made the CI roles, the registries
+and the final teardown unmanageable without importing 17 resources by hand. It is now
+`bootstrap/terraform.tfstate` in the versioned, encrypted state bucket.
+
+```
+$ terraform init -migrate-state -force-copy -backend-config=backend.hcl
+  Successfully configured the backend "s3"!
+$ aws s3api head-object ... bootstrap/terraform.tfstate   -> 32382 bytes, AES256, versioned
+$ terraform state list | wc -l                            -> 17, read from S3
+$ terraform plan -detailed-exitcode                       -> exit 0, no changes
+```
+
+The circularity is real and happens exactly once. The first apply in a new account has to run
+on local state, because the bucket does not exist yet, and a full teardown has to move the
+state back out first, because the bucket cannot hold the state of its own destruction. Both
+procedures are written at the top of `infra/bootstrap/backend.tf`, where someone will be
+looking when they need them.
+
 ### An external review found two real defects, and one of them had already bitten
 
 **1. A failing test run could go green, and it had.** With no `shell` named, GitHub runs a
