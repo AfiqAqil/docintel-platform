@@ -131,17 +131,22 @@ resource "aws_route" "worker_internet" {
 # VPC endpoints
 #
 # With no NAT in the default mode, this is how tasks reach AWS APIs at all. In the fallback
-# mode they stay: AWS traffic keeps using them and only calls to the OpenAI API cross the NAT.
+# mode the AWS ones stay: AWS traffic keeps using them and only calls to the OpenAI API cross
+# the NAT.
 # ---------------------------------------------------------------------------------------
 locals {
-  interface_endpoints = toset([
-    "ecr.api",         # image manifest and auth
-    "ecr.dkr",         # image layers' registry endpoint
-    "logs",            # the awslogs driver
-    "sqs",             # the worker's long poll
-    "secretsmanager",  # database password, and the OpenAI key in fallback mode
-    "bedrock-runtime", # model calls in the default mode
-  ])
+  interface_endpoints = toset(concat(
+    [
+      "ecr.api",        # image manifest and auth
+      "ecr.dkr",        # image layers' registry endpoint
+      "logs",           # the awslogs driver
+      "sqs",            # the worker's long poll
+      "secretsmanager", # database password, and the OpenAI key in fallback mode
+    ],
+    # Model calls, in the default mode only. In the OpenAI fallback nothing calls Bedrock, and
+    # an idle interface endpoint still bills by the hour, so it is not created.
+    var.llm_provider == "bedrock" ? ["bedrock-runtime"] : [],
+  ))
 }
 
 resource "aws_vpc_endpoint" "interface" {

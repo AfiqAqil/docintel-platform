@@ -523,7 +523,7 @@ flowchart LR
             FE[Frontend tasks]
             API[API tasks]
             RDS[(RDS)]
-            VPE["Interface endpoints:<br/>ECR api/dkr, Logs,<br/>SQS, Bedrock, Secrets"]
+            VPE["Interface endpoints:<br/>ECR api/dkr, Logs,<br/>SQS, Secrets, and Bedrock<br/>in the default mode"]
         end
         subgraph wpriv["Worker subnets, default route only when enable_nat"]
             AI[Worker tasks]
@@ -560,9 +560,12 @@ sits in its own pair of private subnets with its own route table: the frontend, 
 database can then never acquire an internet route, whatever the variable says.
 
 `enable_nat` exists for the OpenAI fallback and nothing else. A plan with
-`llm_provider = "openai"` and `enable_nat = false` fails a precondition rather than deploying a
-worker that cannot reach its model. The VPC endpoints stay in place in both modes: AWS API
-traffic keeps using them, and only calls to the OpenAI API traverse the NAT gateway.
+`llm_provider = "openai"` and `enable_nat = false` fails a variable validation at plan time
+rather than deploying a worker that cannot reach its model. The AWS endpoints (ECR, Logs, SQS,
+Secrets Manager, S3) stay in place in both modes: AWS API traffic keeps using them, and only
+calls to the OpenAI API traverse the NAT gateway. The one exception is the Bedrock endpoint,
+which is created only when `llm_provider = "bedrock"`. Nothing calls Bedrock in the fallback
+mode, and an idle interface endpoint still bills by the hour.
 
 **Private service discovery.** Terraform creates a Cloud Map **private DNS namespace**,
 `docintel.internal`. Cloud Map itself creates and owns the Route 53 private hosted zone behind
