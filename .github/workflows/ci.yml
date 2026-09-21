@@ -12,6 +12,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Named explicitly, because it changes behaviour. With no `shell`, GitHub runs steps as
+# `bash -e {0}`, where a pipeline's status is the status of its LAST command: `pytest | tee`
+# succeeds whenever tee does, and a failing test run goes green. Naming bash makes GitHub use
+# `bash --noprofile --norc -eo pipefail {0}`, so a failure anywhere in a pipe fails the step.
+# This was not hypothetical: the first green run of this workflow reported
+# "84 passed, 16 errors".
+defaults:
+  run:
+    shell: bash
+
 env:
   AWS_REGION: ap-southeast-1
   TF_IN_AUTOMATION: "true"
@@ -93,6 +103,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     defaults:
       run:
+        shell: bash
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4

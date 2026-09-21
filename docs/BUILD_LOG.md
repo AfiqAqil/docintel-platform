@@ -954,6 +954,46 @@ worktree that first applied it. It was not applied. The state was copied across,
 became two in place updates, and the stale copy was renamed so it cannot be applied by
 mistake. The file holds no secret values.
 
+### An external review found two real defects, and one of them had already bitten
+
+**1. A failing test run could go green, and it had.** With no `shell` named, GitHub runs a
+step as `bash -e {0}`, where a pipeline's exit status is that of its last command. The step
+was `pytest | tee pytest.out`, so it succeeded whenever `tee` did. Checking the run this log
+had just recorded as green showed the worker job's real result:
+
+```
+84 passed, 16 errors
+```
+
+So the "success python (worker)" line in the verification block above was false, and it is
+left there on purpose, next to this correction. Both workflows now set
+`defaults.run.shell: bash`, which GitHub expands to `bash -eo pipefail`. The same flaw sat in
+two places the review did not name, `terraform plan | tee` and the target health check, and
+they are covered by the same line. Reproduced locally before fixing:
+
+```
+$ bash -e -c 'false | tee /dev/null; echo continued'            -> continued, exit 0
+$ bash -eo pipefail -c 'false | tee /dev/null; echo continued'  -> exit 1
+```
+
+**The 16 errors were a real test isolation bug.** Only `test_claim_sql.py` ran the backend's
+migration, through a fixture local to that module. `test_ack_rules.py` assumed the table
+already existed. Locally it always did, because the backend's tests had run against the same
+database first. In CI each service gets its own empty database, and the ack rule tests, the
+ones covering what the consumer deletes and what it leaves, never ran. Reproduced on a brand
+new database (84 passed, 16 errors), then fixed by moving the migration into one session
+fixture in `conftest.py` that both modules' `conn` fixtures depend on. On a new database:
+100 passed, and `test_ack_rules.py` alone passes too.
+
+**2. The deploy could run unreviewed code under an administrator role.** The workflow took a
+free form `ref` input and both privileged jobs checked it out. The `dev` environment admits
+only runs dispatched from `main`, but that governs which workflow file runs, not which commit
+it checks out. Anyone able to press the button could have deployed any reachable branch, its
+Dockerfiles and its Terraform, under `AdministratorAccess`, which made the main only
+restriction decorative. The input is removed. A run deploys the commit it was dispatched
+from, a guard step refuses any ref but `refs/heads/main`, and a rollback is a revert on
+`main`, reviewed like any other change.
+
 ### Decisions worth defending
 
 **The deploy workflow has no `push` trigger.** Merging to `main` starts nothing. This

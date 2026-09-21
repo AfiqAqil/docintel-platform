@@ -8,6 +8,8 @@ node internals and proving nothing.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -37,3 +39,39 @@ def fake_llm():
 
     yield _install
     set_override(None)
+
+
+
+DATABASE_DSN = os.environ.get(
+    "TEST_DATABASE_DSN", "postgresql://docintel:docintel@localhost:55432/docintel"
+)
+
+
+@pytest.fixture(scope="session")
+def database_schema() -> None:
+    """Create the schema with the backend's migration, never with a copy of the DDL.
+
+    Every database test depends on this, through its own `conn` fixture. It used to live in
+    one test module, which meant the other module only passed when something else had already
+    created the table: locally the backend's tests had, and in CI, where each service gets its
+    own empty database, nothing had. Not autouse, so the graph tests still need no database.
+
+    If alembic is missing the tests skip rather than quietly creating the table here, because
+    a second definition of the schema is exactly what this is designed to prevent. CI fails
+    the build on any skip, so that cannot pass silently either.
+    """
+    backend = Path(__file__).resolve().parents[2] / "backend"
+    alembic = backend / ".venv" / "bin" / "alembic"
+    if not alembic.exists():
+        pytest.skip(f"backend virtualenv not built at {alembic}")
+
+    subprocess.run(
+        [str(alembic), "upgrade", "head"],
+        cwd=backend,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "DATABASE_URL": DATABASE_DSN.replace("postgresql://", "postgresql+psycopg://"),
+        },
+    )

@@ -1,20 +1,22 @@
 # Build, publish and deploy. This workflow NEVER runs on its own.
 #
 # Two independent gates stand between a merge and a change to AWS:
-#   1. The only trigger is workflow_dispatch. A push to main starts nothing, so merging docs
+#   1. The only trigger is workflow_dispatch, with no ref input, so it deploys main and
+#      nothing else. A push to main starts nothing, so merging docs
 #      cannot apply Terraform, and after a `terraform destroy` nothing recreates the stack.
 #   2. Every job that touches AWS runs in the `dev` GitHub environment. The deploy role's
 #      trust policy accepts only that environment's OIDC subject, so no other workflow, branch
 #      or event in this repository can assume it, whatever its YAML says.
 name: deploy
 
+# There is deliberately no `ref` input. The jobs below hold an administrator role, and they
+# check out and run whatever commit they are given: its Dockerfiles, its Terraform. A free
+# form ref would let anyone who can press the button run an unreviewed branch under that
+# role, which makes the environment's main-only restriction decorative. The run deploys the
+# commit it was dispatched from, and the environment only admits runs dispatched from main.
+# Rolling back is a revert on main, which is reviewed like any other change.
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: Branch, tag or SHA to deploy
-        required: true
-        default: main
 
 permissions:
   contents: read
@@ -24,6 +26,15 @@ permissions:
 concurrency:
   group: deploy-dev
   cancel-in-progress: false
+
+# Named explicitly, because it changes behaviour. With no `shell`, GitHub runs steps as
+# `bash -e {0}`, where a pipeline's status is the status of its LAST command: `pytest | tee`
+# succeeds whenever tee does, and a failing test run goes green. Naming bash makes GitHub use
+# `bash --noprofile --norc -eo pipefail {0}`, so a failure anywhere in a pipe fails the step.
+# Here that protects the target health check, which pipes into tee.
+defaults:
+  run:
+    shell: bash
 
 env:
   AWS_REGION: ap-southeast-1
@@ -38,9 +49,15 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
+      # No `ref`: this checks out the commit the run was dispatched from, which the
+      # environment guarantees is on main.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
+
+      # Belt and braces. The environment already refuses any other branch, but this job is
+      # about to hold an administrator role, so it says so itself as well.
+      - name: Refuse anything that is not main
+        run: |
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::deploys run from main only, not $GITHUB_REF"; exit 1; }
 
       # The tag is the commit. ECR tags are immutable, so a tag can never point at different
       # bytes, and "what is running" always maps to exactly one commit.
@@ -82,9 +99,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     environment: dev
     steps:
+      # The same commit the publish job built, because both jobs belong to one run.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref }}
 
       - uses: hashicorp/setup-terraform@v3
         with:

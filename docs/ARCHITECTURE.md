@@ -740,7 +740,8 @@ flowchart LR
 merge and a change to AWS:
 
 1. It has no `push` trigger at all. The only way to start it is `workflow_dispatch`, a person
-   pressing a button. Merging to `main` starts nothing, so merging documentation cannot apply
+   pressing a button. It takes no `ref` input: it deploys the commit it was dispatched from,
+   so it cannot be pointed at an unreviewed branch while holding the deploy role. Merging to `main` starts nothing, so merging documentation cannot apply
    Terraform, and after a `terraform destroy` nothing recreates the stack.
 2. Every job that touches AWS runs in the `dev` GitHub environment, which is restricted to
    the `main` branch. The deploy role's trust policy accepts only that environment's OIDC
