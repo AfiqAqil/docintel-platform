@@ -1,0 +1,10 @@
+# Worker log lines for document f50f668e-cb93-4055-846d-0cd56ed33c65 (CloudWatch Logs, /ecs/docintel-dev/worker)
+{"asctime": "2026-09-21T09:15:48+0000", "levelname": "INFO", "name": "worker", "document_id": "f50f668e-cb93-4055-846d-0cd56ed33c65", "message": "claimed, attempt 1 of 3"}
+{"asctime": "2026-09-21T09:15:59+0000", "levelname": "INFO", "name": "worker", "document_id": "f50f668e-cb93-4055-846d-0cd56ed33c65", "message": "recorded COMPLETED as COMPLETE"}
+
+# Worker startup
+2026-09-21T09:06:31 {"asctime": "2026-09-21T09:06:31+0000", "levelname": "INFO", "name": "worker", "document_id": "-", "message": "waiting for the schema: relation \"documents\" does not exist\nLINE 1: SELECT 1 FROM documents LIMIT 1\n                      ^"}
+2026-09-21T09:06:35 {"asctime": "2026-09-21T09:06:35+0000", "levelname": "INFO", "name": "worker", "document_id": "-", "message": "schema is present"}
+2026-09-21T09:06:35 {"asctime": "2026-09-21T09:06:35+0000", "levelname": "INFO", "name": "worker", "document_id": "-", "message": "polling https://sqs.ap-southeast-1.amazonaws.com/277707137200/docintel-dev-processing"}
+2026-09-21T09:06:35 {"asctime": "2026-09-21T09:06:35+0000", "levelname": "INFO", "name": "worker", "document_id": "-", "message": "ignoring s3:TestEvent"}
+2026-09-21T09:15:48 {"asctime": "2026-09-21T09:15:48+0000", "levelname": "INFO", "name": "worker", "document_id": "f50f668e-cb93-4055-846d-0cd56ed33c65", "message": "claimed, attempt 1 of 3"}

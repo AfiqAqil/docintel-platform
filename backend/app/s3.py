@@ -10,6 +10,7 @@ import json
 from typing import Any
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from app.config import settings
@@ -26,7 +27,15 @@ def _client(for_browser: bool = False) -> Any:
     endpoint = settings.aws_endpoint_url
     if for_browser and settings.s3_public_endpoint_url:
         endpoint = settings.s3_public_endpoint_url
-    return boto3.client("s3", region_name=settings.aws_region, endpoint_url=endpoint)
+    # Signature Version 4, stated rather than left to the default. boto3 signs a presigned
+    # POST with the legacy scheme unless told otherwise, and SigV4 is the only one every
+    # region and every bucket encryption setting accepts.
+    return boto3.client(
+        "s3",
+        region_name=settings.aws_region,
+        endpoint_url=endpoint,
+        config=Config(signature_version="s3v4"),
+    )
 
 
 def _safe_filename(filename: str) -> str:

@@ -802,3 +802,144 @@ frontend: tsc --noEmit && vite build, clean
 images:   worker and backend build from uv.lock, import their code, alembic present,
           uv absent from the runtime stage
 ```
+
+---
+
+## Phase 9: Terraform, and the first deployment
+
+**Built.** Two stacks, as `ARCHITECTURE.md` section 9 lays out.
+
+| Stack | State | Contents |
+|---|---|---|
+| `infra/bootstrap/` | Local, applied once by hand | State bucket, three ECR repositories, the empty OpenAI key secret, the GitHub OIDC provider, a read only plan role, and a deploy role assumable only from the reviewer gated GitHub environment |
+| `infra/` | S3 backend with native locking | VPC with public, app and worker tiers, five interface endpoints plus the S3 gateway endpoint, a NAT gateway on the worker route table only, six security groups, S3 with the `uploads/` event filter, SQS with a DLQ and an alarm, RDS, IAM, the load balancer, and one reusable `ecs_service` module used three times |
+
+**Applied.** Bootstrap: 17 resources. Main stack: 91 resources in about six minutes, then one
+more for an allowlist change. Images were built for arm64 and pushed under the git SHA before
+the main stack was applied, which is the ordering the bootstrap stack exists to make possible.
+
+**Verified on AWS**, from outside the VPC, through the load balancer. The output is committed
+under `docs/evidence/`.
+
+```
+frontend   desired 1  running 1  rollout COMPLETED
+backend    desired 1  running 1  rollout COMPLETED
+worker     desired 1  running 1  rollout COMPLETED
+target 10.0.11.47:8080  healthy
+
+api.docintel.internal.  A  ttl 10  10.0.10.35      (private hosted zone, owned by Cloud Map)
+
+route table docintel-dev-app      default route: none
+route table docintel-dev-worker   default route: nat gateway
+route table docintel-dev-public   default route: internet gateway
+
+POST /api/documents                -> 201, upload url https://s3.ap-southeast-1.amazonaws.com/...
+POST to S3 with an Origin header   -> 204, Access-Control-Allow-Origin: the load balancer
+POST /upload-complete              -> QUEUED
+12 seconds later                   -> COMPLETED, COMPLETE, claim_form
+```
+
+The worker's own startup log shows three design decisions holding on real infrastructure: it
+waited for the schema while the API ran the migration, it polled SQS through the VPC endpoint,
+and it ignored the `s3:TestEvent` S3 sends when a notification is created.
+
+The allowlist was proven by accident. The machine moved to a different network between the
+plan and the test, so its public address changed, and the load balancer stopped answering: the connection timed out rather than
+returning an error, which is what a security group does. Adding the new address was one rule.
+
+### Four things the real deployment surfaced
+
+None of these could have been found by `terraform validate`, which passed throughout.
+
+1. **`count` cannot depend on a value unknown until apply.** The module decided whether to
+   create the Cloud Map service by testing `discovery_namespace_id` for null. The id does not
+   exist while planning, so the first plan failed with `Invalid count argument`. Two plain
+   booleans, `register_in_dns` and `attach_to_load_balancer`, decide it now.
+2. **An empty `health_check_custom_config {}` block is not persisted by the provider.** Every
+   later plan wanted to replace the Cloud Map service, which would have dropped the API's DNS
+   record during the replacement. The block is removed. ECS adds and removes a task's address
+   as the task starts and stops, and a task failing its container health check is stopped by
+   ECS, so DNS follows task health without it.
+3. **The presigned POST has to be SigV4 and has to name the regional endpoint.** boto3 signs a
+   presigned POST with the legacy scheme by default, and the global S3 endpoint answers a newly
+   created bucket with a redirect that a browser will not follow on a cross origin POST. The
+   API now sets `signature_version="s3v4"` and Terraform sets
+   `S3_PUBLIC_ENDPOINT_URL=https://s3.ap-southeast-1.amazonaws.com`.
+4. **The API cannot scale on request count.** `ARCHITECTURE.md` said CPU and request count.
+   Request count is a load balancer metric, and the API deliberately has no target group. It
+   scales on CPU, and the document now says why.
+
+### Two deliberate deviations, both written into ARCHITECTURE.md
+
+- **The Bedrock interface endpoint exists only in bedrock mode.** Nothing calls Bedrock in the
+  OpenAI fallback, and an idle interface endpoint still bills by the hour.
+- **Security group rules live in their own file**, `security_groups.tf`, one resource per rule,
+  so two groups can reference each other without a dependency cycle.
+
+### Decisions worth defending
+
+**Three subnet tiers, not two.** The worker has its own subnets and route table so that
+`enable_nat` can only ever give the worker an internet route. With a shared private tier, the
+fallback would have given the API and the database's subnets a default route as well.
+
+**`llm_provider = "openai"` with `enable_nat = false` fails at plan time**, through a variable
+validation. The alternative is a worker that deploys cleanly and then cannot reach its model.
+
+**`allowed_cidrs` rejects `0.0.0.0/0` and an empty list.** The platform has no end user
+authentication, so that list is the access control, and behind it is a model bill.
+
+**The two stacks share no state.** The main stack finds the ECR repositories and the OpenAI
+secret by name through data sources, so bootstrap can stay on local state and nothing reads
+another stack's state file.
+
+**The CI deploy role is AdministratorAccess, and the control is who can assume it.** Its trust
+policy accepts only the subject claim of the reviewer gated GitHub environment, so a push to
+main cannot assume it. A least privilege policy for a stack that creates IAM roles, a VPC, RDS
+and ECS is its own project, and is named as the production approach in the code.
+
+**Cost.** About 6 USD a day while it runs, of which the NAT gateway is 1.55 and exists only
+because Bedrock is blocked. The environment is meant to be applied, verified and destroyed,
+and `destroyable = true` in `dev.tfvars` is what makes destroy and recreate work: forced
+bucket and repository deletion, no final RDS snapshot, and a zero day secret recovery window.
+
+**Delegated.** Nothing. The plan kept networking and IAM off the delegation list, and the rest
+of the stack was small enough that splitting it would have cost more in interface agreement
+than it saved.
+
+---
+
+## The Bedrock quota block: what is known, and what was decided
+
+Recorded here because it decides how the platform is deployed, and because the facts are
+easy to misremember.
+
+**Facts, each one checked rather than assumed.**
+
+- Every Amazon Bedrock Converse call on account `277707137200` fails with
+  `ThrottlingException: Too many tokens per day`. Reproduced with Amazon Nova Pro in
+  `ap-southeast-1`, `ap-northeast-1` and `us-west-2`, most recently on 2026-09-21.
+- Service Quotas shows `0` for "Model invocation max tokens per day for Amazon Nova Pro" in
+  `ap-southeast-1`, and marks that quota as not adjustable, so it cannot be raised through
+  self service. Two other regions list a large default and reject calls all the same, so the
+  listed value is not what is applied to the account.
+- The account is not in an AWS Organization, so no organization policy is involved, and a
+  valid payment method is on file.
+- One call, once, returned "Your account is currently being verified". It did not recur, and
+  AWS has not confirmed that verification is the cause. It is recorded as an observation and
+  not as the explanation.
+
+**AWS Support case 178990624000702**, opened 2026-09-20 on Basic Support.
+
+| When (Malaysia time) | What happened |
+|---|---|
+| 2026-09-20 20:10 | Case opened, contact method Web |
+| 2026-09-21 14:31 | Still `Unassigned` with no reply after about 18 hours. Follow up posted |
+| 2026-09-21 14:35 | Live chat requested on the same case |
+| 2026-09-21 14:39 to 14:45 | Agent confirmed the symptoms, asked whether the account has an Account Manager (it does not), and escalated to the Bedrock service team. Stated response time: usually 24 to 48 hours |
+
+**Decision.** The deployment does not wait for it. The platform deploys with
+`llm_provider = "openai"` and `enable_nat = true`, the documented fallback in
+`ARCHITECTURE.md` sections 6, 8 and 15. Bedrock stays the default in Terraform and stays
+fully implemented. If the quota is granted, switching back is two variable changes and no
+code change, preceded by the one Nova Pro test call the README lists as a prerequisite.
+

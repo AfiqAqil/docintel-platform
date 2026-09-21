@@ -506,7 +506,7 @@ Bedrock permissions at all.
 | **Stuck rows** | A worker that dies on every attempt sends the message to the DLQ without anyone writing a status. A reaper statement in the poll loop sweeps rows left in `PROCESSING` with a lease expired well past the redrive window, and rows left in `UPLOADING` past the presigned POST expiry. The second sweep is a guess about a user who walked away, so it writes `EXPIRED`, which a later S3 event can still override |
 | **Recovery after interruption** | If a worker dies mid-graph, the message reappears after the visibility timeout, the lease has expired, and the graph re-runs from the start. Re-running a handful of model calls is cheaper than operating a checkpoint store |
 | **Traceability** | `document_id` is the correlation id in every log line across all three services, and it is the S3 key. S3 event notifications cannot carry custom message attributes, so the consumer parses the id from the key and puts it into the logging context for the whole message lifetime. The per-node `trace` is persisted with the report |
-| **Independent scaling** | The API scales on CPU and request count. The worker uses step scaling on `ApproximateNumberOfMessagesVisible`, so a burst of uploads adds workers and never slows intake |
+| **Independent scaling** | The API scales on average CPU with target tracking. Request count is not available to it, because request count is a load balancer metric and the API deliberately has no target group. The worker uses step scaling on `ApproximateNumberOfMessagesVisible`, so a burst of uploads adds workers and never slows intake |
 
 ---
 
@@ -523,7 +523,7 @@ flowchart LR
             FE[Frontend tasks]
             API[API tasks]
             RDS[(RDS)]
-            VPE["Interface endpoints:<br/>ECR api/dkr, Logs,<br/>SQS, Bedrock, Secrets"]
+            VPE["Interface endpoints:<br/>ECR api/dkr, Logs,<br/>SQS, Secrets, and Bedrock<br/>in the default mode"]
         end
         subgraph wpriv["Worker subnets, default route only when enable_nat"]
             AI[Worker tasks]
@@ -560,9 +560,12 @@ sits in its own pair of private subnets with its own route table: the frontend, 
 database can then never acquire an internet route, whatever the variable says.
 
 `enable_nat` exists for the OpenAI fallback and nothing else. A plan with
-`llm_provider = "openai"` and `enable_nat = false` fails a precondition rather than deploying a
-worker that cannot reach its model. The VPC endpoints stay in place in both modes: AWS API
-traffic keeps using them, and only calls to the OpenAI API traverse the NAT gateway.
+`llm_provider = "openai"` and `enable_nat = false` fails a variable validation at plan time
+rather than deploying a worker that cannot reach its model. The AWS endpoints (ECR, Logs, SQS,
+Secrets Manager, S3) stay in place in both modes: AWS API traffic keeps using them, and only
+calls to the OpenAI API traverse the NAT gateway. The one exception is the Bedrock endpoint,
+which is created only when `llm_provider = "bedrock"`. Nothing calls Bedrock in the fallback
+mode, and an idle interface endpoint still bills by the hour.
 
 **Private service discovery.** Terraform creates a Cloud Map **private DNS namespace**,
 `docintel.internal`. Cloud Map itself creates and owns the Route 53 private hosted zone behind
@@ -643,16 +646,17 @@ infra/
                       # optional Cloud Map registration (the API only)
   network.tf          # VPC, app and worker subnets with separate route tables,
                       # optional NAT gateway (worker route table only),
-                      # security groups, VPC endpoints,
-                      # Cloud Map private DNS namespace
+                      # VPC endpoints, Cloud Map private DNS namespace
+  security_groups.tf  # six groups. Every rule is its own resource and names one source
   data.tf             # S3, RDS, SQS + DLQ
-  ecs.tf              # cluster + three ecs_service module calls
+  ecs.tf              # cluster, three ecs_service module calls, worker step scaling
   alb.tf              # load balancer, listener, target group
   iam.tf              # task roles, least privilege per service. The worker gets Bedrock
                       # permissions or the OpenAI secret, never both
-  variables.tf outputs.tf
+  versions.tf variables.tf outputs.tf
   envs/
     dev.tfvars  dev.backend.hcl
+    dev.local.tfvars.example   # allowed_cidrs. The real file is gitignored
     prod.tfvars.example
 ```
 
@@ -837,7 +841,7 @@ in the meantime.
 | The applications connect as the RDS master user | One credential to provision, and the assessment has a single schema | A dedicated least-privilege role per service, ideally IAM database authentication so there is no password at all | A compromised task has full rights on the database, including DDL |
 | Bedrock is assumed to be usable on the target account | Nothing in the application can detect or fix an account-level quota block | Deploy into an account whose Bedrock access is already established, and alarm on `ThrottlingException` and `AccessDeniedException` from the worker | An account with little usage history can carry a daily token quota of zero, which fails every model call while looking like an application bug. The daily quota is not self-service adjustable, so raising it needs an AWS Support case. The README makes one test call a prerequisite before deploying |
 | Destroy friendly settings in dev: `force_destroy` on the buckets, `force_delete` on the ECR repositories, `skip_final_snapshot = true` with no deletion protection on RDS, and `recovery_window_in_days = 0` on the OpenAI key secret | A reviewer has to be able to destroy and recreate this environment cleanly. Without these, a destroy stalls on a bucket with objects in it, an ECR repository with images, an RDS final snapshot prompt, and a secret that stays name reserved for 7 to 30 days and blocks the next apply | The opposite of every one of them: `force_destroy = false`, image tags retained, `skip_final_snapshot = false` with `deletion_protection = true`, and a 30 day secret recovery window. They are all driven off a single `ephemeral` variable, so production sets it to false and gets the safe values with no other change | In dev a `terraform destroy` really does delete the uploaded documents, the generated reports, the database and the pushed images, with no snapshot and no recovery window. That is the intent here, and it would be unacceptable anywhere else |
-| The deployed demo may run on OpenAI over a NAT gateway rather than on Bedrock | The account's Bedrock token quota is 0 in every region tested, the daily quota is not self-service adjustable, and a support case is open. Waiting on it would leave the platform with no working model path | Bedrock through the VPC endpoint: IAM authentication, no stored credential, no internet egress, and documents that never leave AWS | In this mode the worker has outbound 443 to the internet, an API key sits in Secrets Manager, and documents are processed by a third party. It is acceptable only because every document in this repository is synthetic |
+| The deployed demo may run on OpenAI over a NAT gateway rather than on Bedrock | The account's Bedrock token quota is 0 in every region tested, the daily quota is not self-service adjustable, and AWS Support case 178990624000702 (opened 2026-09-20) is open. On 2026-09-21 AWS Support confirmed by live chat that the case is escalated to the Bedrock service team, whose usual response time is 24 to 48 hours. Waiting on it would leave the platform with no working model path | Bedrock through the VPC endpoint: IAM authentication, no stored credential, no internet egress, and documents that never leave AWS | In this mode the worker has outbound 443 to the internet, an API key sits in Secrets Manager, and documents are processed by a third party. It is acceptable only because every document in this repository is synthetic |
 
 ---
 
