@@ -146,6 +146,15 @@ jobs:
           terraform -chdir=infra/bootstrap init -backend=false -input=false
           terraform -chdir=infra/bootstrap validate
 
+      # The subject claim is what the role's trust policy matches on. Printing it costs nothing
+      # and turns "not authorized" from a guess into a string comparison. It is an identifier,
+      # not a credential: the token itself is never printed.
+      - name: Show the OIDC subject claim
+        run: |
+          token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          echo "$token" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq '{sub, aud, ref, event_name}' || true
+
       # Read only. It can plan and it cannot change anything. Its trust policy accepts only
       # the pull_request subject of this repository.
       - uses: aws-actions/configure-aws-credentials@v4
