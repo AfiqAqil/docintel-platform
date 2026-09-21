@@ -975,6 +975,38 @@ state back out first, because the bucket cannot hold the state of its own destru
 procedures are written at the top of `infra/bootstrap/backend.tf`, where someone will be
 looking when they need them.
 
+### The deploy run
+
+`deploy.yml` can only be dispatched once it is on `main`, so it was run once after the merge.
+The merge itself started nothing, which is the first gate doing its job.
+
+```
+event       workflow_dispatch        branch  main        commit  f5bf8f6a8e37
+success  build and publish images    three arm64 images pushed as :f5bf8f6a8e37
+success  terraform apply and verify  Apply complete! Resources: 3 added, 3 changed, 3 destroyed.
+           image  ...:834e970af72a -> ...:f5bf8f6a8e37   (frontend, backend, worker)
+           Wait for the three services to be stable
+           Every service runs the image that was just published
+           The load balancer target is healthy           10.0.10.61  healthy
+about 5 minutes, start to finish
+```
+
+Three added, three changed, three destroyed is exactly an application deploy: three new task
+definition revisions, three services pointed at them, three old revisions retired. Nothing
+else in the stack moved, which is what "the application is deployed by changing one variable"
+is supposed to look like.
+
+**Checked independently, because a green step is not evidence.** This log has already had to
+correct one false green, so the run was not taken at its word. Read straight from AWS
+afterwards: all three services on task definition revision 2, one task running each, rollout
+`COMPLETED`, image tag `f5bf8f6a8e37`. Then an invoice uploaded through the load balancer
+against the newly deployed images reached `COMPLETED` / `COMPLETE` in about 18 seconds, and
+the document uploaded before the deploy was still listed after it. The full record is
+`docs/evidence/ci-deploy-run.txt`.
+
+It was also the first time the administrator deploy role was assumed. Its trust policy had
+only been proven by analogy with the read only role until then.
+
 ### An external review found two real defects, and one of them had already bitten
 
 **1. A failing test run could go green, and it had.** With no `shell` named, GitHub runs a
