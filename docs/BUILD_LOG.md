@@ -1146,6 +1146,85 @@ with a real report for each, the architecture diagrams, the documentation, and t
 
 ---
 
+## Documents the platform had never seen, and the two defects they found
+
+Every sample so far came from this repository's own generator, which means every sample was
+shaped by the same assumptions as the code reading it. Six documents were produced by a
+separate tool from a plain description, with no knowledge of the prompts or the rules, and
+run through the deployed environment and then locally. All six were classified correctly.
+Two results were wrong, and both were real defects.
+
+### 1. A valid invoice came back INCOMPLETE, two times in three
+
+The invoice's line items were a real table. In extracted text a table's header row and its
+cells are far apart, and the model cited evidence as `"Amount\n425.00"`, joining a column
+header to a cell. That span exists nowhere in the source, so snippet verification rejected
+it, correctly, cleared all four amounts, and the invoice failed its arithmetic rule. The
+repository's own invoice sample never exercised this, because its generator writes inline
+labels (`Qty: 1`) and not a table.
+
+Reproduced locally before changing anything, three runs of the same file:
+
+```
+run 1  INCOMPLETE  12 errors   run 2  INCOMPLETE  4 errors   run 3  COMPLETE  0 errors
+```
+
+Three runs, two outcomes, which was the second finding: no caller set a temperature, so
+extraction ran at the provider's default randomness.
+
+**Fixed in two places.** The shared snippet instruction now says a snippet is one contiguous
+span copied character for character, and for a table cell, the cell's own text and nothing
+else. `get_chat_model` defaults `temperature` to 0, in one place. Five runs after:
+
+```
+runs 1 to 5  COMPLETE  0 errors  1 extraction pass  amounts 425.00 780.00 165.00 120.00
+```
+
+### 2. A home address was published unmasked
+
+The leak check that every set of reports goes through found a claimant's address in a report.
+The field's value was masked. Its evidence snippet was not:
+
+```
+"value":   "•• ••••••••• ••••, ••••••, •••••••"
+"snippet": "Address\n62 Mossglass Lane, Varrow,\nElandor"
+```
+
+The PDF wrapped the address onto a second line, so the snippet held a line break where the
+value held a space. Snippet verification normalises whitespace and case, so the snippet
+verified. Masking found values by exact text match, so it found nothing to redact. The two
+rules disagreed about what "the same text" means, and the gap between them was exactly wide
+enough for a wrapped address. The same gap existed for capitalisation: a name printed in
+capitals would have escaped a value returned in title case.
+
+A failing test came first, `tests/test_mask.py`, using the snippet exactly as `pypdf` returns
+it. Two of its four cases failed before the fix. Masking now matches any run of whitespace
+against any run of whitespace, ignores case, and masks the text it actually found, so the
+line breaks survive in the mask:
+
+```
+"snippet": "Address / •• ••••••••• ••••, ••••••, / •••••••"
+```
+
+**Verified.** 104 worker tests pass, up from 100. All 17 documents were run again with a real
+model, and the leak check was tightened to compare whitespace and case insensitively, which
+is how it should have worked from the start: 20 personal values across 17 reports, 0 leaks.
+No outcome regressed on the original eleven samples. One changed for the better:
+`damage_photo.jpg` is now consistently `supporting_evidence`, where the committed report still
+showed an older `UNSUPPORTED` from before temperature was fixed.
+
+### What was deliberately left alone
+
+The identity card came back `INCOMPLETE` because its number, `ELD-260921-74`, does not match
+this platform's own convention of one letter and eight digits. That is the format rule doing
+what `rules/validate.py` documents, on a document that was never told the rule. A real
+deployment would carry per country formats. Loosening the rule to make one specimen pass
+would have been tuning the platform to the test.
+
+The six documents and their reports are committed under `samples/external/`.
+
+---
+
 ## The Bedrock quota block: what is known, and what was decided
 
 Recorded here because it decides how the platform is deployed, and because the facts are

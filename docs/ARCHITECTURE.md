@@ -270,6 +270,12 @@ a recognisable shape, for example `••••••-••-4321`, so a reviewe
 from another. Raw `text`, `page_images` and unmasked field values are never written to logs or
 persisted in the report.
 
+Masking finds a value the same way snippet verification finds a snippet: any run of whitespace
+matches any run of whitespace, and case is ignored. The two have to agree. When masking used
+an exact text match, an address that wrapped onto a second line in the source verified
+correctly and was then published unmasked inside its own evidence snippet, because the
+snippet held a line break where the value held a space.
+
 ### State model
 
 One `TypedDict` shared by every node. Nodes return only the keys they change.
@@ -382,7 +388,13 @@ silently produces a confident but wrong extraction.
 **Extraction (LLM, per type).** Each document type has a Pydantic model describing its fields
 and which are required. The model is given the schema and returns structured output, so parsing
 failures surface as validation errors instead of malformed text. Every field carries the
-**evidence snippet** it came from.
+**evidence snippet** it came from. The prompt requires a snippet to be one contiguous span
+copied character for character, and for a value inside a table, the cell's own text and
+nothing else. In extracted text a table's header row is far from its cells, so
+"Amount 425.00" is not a span that exists, even though both words do.
+
+Model calls run at temperature 0. Classification and extraction are not creative tasks, and
+the same document should produce the same answer.
 
 **Validation (deterministic, not the LLM).**
 

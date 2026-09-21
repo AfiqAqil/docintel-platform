@@ -27,7 +27,16 @@ SNIPPET_INSTRUCTION = (
     "Only report a field's value if you can back it with an exact, verbatim quote from the "
     "source text, placed in that field's snippet. If you cannot find a direct quote for a "
     "value, leave the field null rather than guessing. A snippet that is not an exact match "
-    "for the source text is treated as a fabricated citation and the field is discarded."
+    "for the source text is treated as a fabricated citation and the field is discarded. "
+    # Found by running a real table-layout invoice. In extracted text a table's header row and
+    # its cells are far apart, so "Amount 425.00" is not a span that exists anywhere, even
+    # though both words do. The model cited it that way, the check rightly rejected it, and a
+    # valid invoice came back INCOMPLETE. Our own sample used inline labels ("Qty: 1") and
+    # never exercised this.
+    "A snippet must be ONE contiguous span copied character for character from the text. "
+    "Never join text from two places, and never prepend a label or a column header that is "
+    "not immediately next to the value in the text. For a value inside a table, the snippet "
+    "is the cell's own text and nothing else, for example '425.00', not 'Amount 425.00'."
 )
 
 _DOC_TYPE_LIST = ", ".join(t.value for t in DocType)

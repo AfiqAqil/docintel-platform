@@ -1,13 +1,13 @@
 {
   "document_id": "restaurant_menu",
-  "generated_at": "2026-09-20T13:34:50Z",
+  "generated_at": "2026-09-21T11:14:04Z",
   "document_type": "unknown",
   "classification": {
     "confidence": 0.9,
-    "notes": "The document lists a seasonal menu for a kitchen, which includes food items and prices. It does not fit any insurance-related categories such as claims, policies, invoices, or customer correspondence."
+    "notes": null
   },
   "outcome": "UNSUPPORTED",
-  "summary": "The document could not be classified into a specific type and has been marked as unsupported, leading to a decision to send it for manual review. No information was extracted from the document, and there were no additional details identified as missing.",
+  "summary": "The document could not be classified into a specific type, and as a result, it has been sent for manual review. No information was extracted from the document, and there were no missing details noted. The overall outcome of the processing was deemed unsupported.",
   "extracted": {},
   "missing_information": [],
   "validation_errors": [],
@@ -18,13 +18,13 @@
     {
       "node": "load_document",
       "status": "ok",
-      "duration_ms": 1,
+      "duration_ms": 2,
       "detail": null
     },
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1339,
+      "duration_ms": 1293,
       "detail": null
     },
     {

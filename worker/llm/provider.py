@@ -64,6 +64,12 @@ def get_chat_model(**kwargs: Any) -> BaseChatModel:
     if _OVERRIDE is not None:
         return _OVERRIDE
 
+    # Classification and extraction are not creative tasks: the same document should produce
+    # the same answer. Left unset, the provider's default temperature applies, and running one
+    # real invoice three times gave two different outcomes. Zero is the default here, in one
+    # place, and a caller that genuinely wants variety can still pass its own.
+    kwargs.setdefault("temperature", 0)
+
     from langchain.chat_models import init_chat_model
 
     provider = CONFIG.llm_provider.lower()

@@ -1,0 +1,78 @@
+{
+  "document_id": "05_delayed_claim_complaint",
+  "generated_at": "2026-09-21T11:14:38Z",
+  "document_type": "customer_correspondence",
+  "classification": {
+    "confidence": 0.95,
+    "notes": "The document is a formal complaint from a customer regarding the handling of a claim, which indicates it is correspondence related to customer service rather than a claim form or other document type."
+  },
+  "outcome": "COMPLETE",
+  "summary": "The document is a customer correspondence titled \"Customer Complaint,\" which addresses a formal complaint regarding delays in the handling of a household claim. The complaint was submitted on September 10, 2026, and involves a monetary amount of 1,260.00. The outcome of the correspondence is marked as complete, and there are no missing information or additional observations noted.",
+  "extracted": {
+    "document_title": {
+      "value": "Customer Complaint",
+      "snippet": "Customer Complaint",
+      "verified": true
+    },
+    "reference_number": {
+      "value": "POL-429816",
+      "snippet": "Policy number POL-429816",
+      "verified": true
+    },
+    "related_party_name": {
+      "value": "\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
+      "snippet": "Yours faithfully,\n\u2022\u2022\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022\u2022\u2022",
+      "verified": true
+    },
+    "date": {
+      "value": "2026-09-10",
+      "snippet": "2026-09-10",
+      "verified": true
+    },
+    "monetary_amount": {
+      "value": "1,260.00",
+      "snippet": "I have paid 1,260.00 for temporary measures.",
+      "verified": true
+    },
+    "summary": {
+      "value": "A formal complaint about the delay in handling a household claim.",
+      "snippet": "I am writing to make a formal complaint about the delay in handling my household claim.",
+      "verified": true
+    }
+  },
+  "missing_information": [],
+  "validation_errors": [],
+  "observations": [],
+  "trace": [
+    {
+      "node": "load_document",
+      "status": "ok",
+      "duration_ms": 2,
+      "detail": null
+    },
+    {
+      "node": "classify",
+      "status": "ok",
+      "duration_ms": 1308,
+      "detail": null
+    },
+    {
+      "node": "extract_generic",
+      "status": "ok",
+      "duration_ms": 1748,
+      "detail": null
+    },
+    {
+      "node": "validate",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    },
+    {
+      "node": "mask_pii",
+      "status": "ok",
+      "duration_ms": 0,
+      "detail": null
+    }
+  ]
+}

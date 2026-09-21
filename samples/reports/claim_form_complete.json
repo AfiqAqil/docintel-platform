@@ -1,13 +1,13 @@
 {
   "document_id": "claim_form_complete",
-  "generated_at": "2026-09-20T13:34:04Z",
+  "generated_at": "2026-09-21T11:13:18Z",
   "document_type": "claim_form",
   "classification": {
     "confidence": 0.95,
-    "notes": "The document is a claim form, as it contains specific details related to an insurance claim including claimant information, incident description, and claimed amount."
+    "notes": "The document is an insurance claim form detailing the incident, claimant information, and the amount claimed, which fits the definition of a claim form."
   },
   "outcome": "COMPLETE",
-  "summary": "The document is a completed claim form regarding a water damage incident caused by a bursting kitchen pipe. The incident occurred on a specified date and was reported a few days later. The claim includes details about the damages to the flooring and cabinets, with a claimed amount for compensation. All necessary information for processing the claim appears to be present, and no additional information is required.",
+  "summary": "The document is a completed claim form related to an incident involving water damage caused by a burst kitchen pipe, which affected the flooring and cabinets. The incident occurred on a specific date, and the claim was filed shortly thereafter. The claimant has provided all necessary information, including their contact details and the amount being claimed. There are no missing pieces of information or additional observations noted in the document.",
   "extracted": {
     "policy_number": {
       "value": "POL-004821",
@@ -78,13 +78,13 @@
     {
       "node": "classify",
       "status": "ok",
-      "duration_ms": 1495,
+      "duration_ms": 1270,
       "detail": null
     },
     {
       "node": "extract_claim",
       "status": "ok",
-      "duration_ms": 3655,
+      "duration_ms": 6101,
       "detail": null
     },
     {
