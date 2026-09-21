@@ -843,8 +843,8 @@ The worker's own startup log shows three design decisions holding on real infras
 waited for the schema while the API ran the migration, it polled SQS through the VPC endpoint,
 and it ignored the `s3:TestEvent` S3 sends when a notification is created.
 
-The allowlist was proven by accident. The machine's ISP address changed between the plan and
-the test, and the load balancer stopped answering: the connection timed out rather than
+The allowlist was proven by accident. The machine moved to a different network between the
+plan and the test, so its public address changed, and the load balancer stopped answering: the connection timed out rather than
 returning an error, which is what a security group does. Adding the new address was one rule.
 
 ### Four things the real deployment surfaced
