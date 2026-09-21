@@ -13,6 +13,7 @@ import contextvars
 import json
 import logging
 import sys
+from datetime import UTC, datetime
 from typing import Any
 
 _document_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -27,6 +28,8 @@ def set_document_id(document_id: str | None) -> None:
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
+            # UTC with an explicit offset, matching the worker's lines.
+            "time": datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="seconds"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
