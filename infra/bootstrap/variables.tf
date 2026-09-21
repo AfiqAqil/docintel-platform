@@ -21,8 +21,24 @@ variable "github_repository" {
   default     = "AfiqAqil/docintel-platform"
 }
 
+# GitHub's OIDC subject claim names the owner and the repository by their immutable numeric
+# ids as well as by name: repo:<owner>@<owner id>/<repo>@<repo id>:<context>. A trust policy
+# written against the older repo:<owner>/<repo>:<context> form matches nothing, and AWS
+# answers "not authorized". The ids also close a real hole: a name can be released and
+# re-registered by someone else, an id cannot.
+#   gh api repos/<owner>/<repo> --jq '.owner.id, .id'
+variable "github_owner_id" {
+  type    = string
+  default = "152358148"
+}
+
+variable "github_repository_id" {
+  type    = string
+  default = "1378307019"
+}
+
 variable "github_deploy_environment" {
-  description = "The GitHub environment the deploy job runs in. It carries a required reviewer, so the deploy role can only be assumed after a human approves the run."
+  description = "The GitHub environment the deploy jobs run in. The deploy role trusts only this environment's OIDC subject, and the environment is restricted to the main branch."
   type        = string
   default     = "dev"
 }

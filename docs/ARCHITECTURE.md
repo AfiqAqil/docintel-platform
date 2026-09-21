@@ -640,7 +640,8 @@ key, one content type, a size limit, and a five minute expiry.
 ```
 infra/
   bootstrap/          # state bucket, ECR repositories, GitHub OIDC role,
-                      # empty OpenAI key secret. Local state, run once
+                      # empty OpenAI key secret. State in the bucket it creates,
+                      # under its own key, after a first run on local state
   modules/
     ecs_service/      # task definition, service, log group, autoscaling,
                       # optional Cloud Map registration (the API only)
@@ -665,7 +666,7 @@ infra/
 | Reusable components | One module, `ecs_service`, used three times. Nothing else is repeated, so nothing else is a module |
 | Environment configuration | One root, per-environment `.tfvars` and backend files. No workspaces, no copied directories |
 | State | S3 backend with versioning, encryption and native S3 locking (`use_lockfile`). The DynamoDB lock table is deprecated |
-| Bootstrap | The state bucket cannot live in the stack it backs. **ECR lives here too**: the ECS services need an image to exist before their first deployment, so the repositories are created and the first images pushed before the main stack is ever applied. Otherwise the first `terraform apply` starts services with no image, the deployment circuit breaker trips, and the apply fails. The empty OpenAI key secret lives here for the same reason: the key must be set before the worker first starts in fallback mode |
+| Bootstrap | A separate small stack, because some things have to exist before the main stack can be applied at all. Its state lives in the bucket it creates, under `bootstrap/terraform.tfstate`. That is circular exactly once: the first apply in a new account runs on local state and the state is then moved in with `terraform init -migrate-state`, and a full teardown is the same thing backwards. `infra/bootstrap/backend.tf` carries both procedures. It is not left local because a local state file lives in one directory on one machine, and losing it means importing every resource again by hand. **ECR lives here too**: the ECS services need an image to exist before their first deployment, so the repositories are created and the first images pushed before the main stack is ever applied. Otherwise the first `terraform apply` starts services with no image, the deployment circuit breaker trips, and the apply fails. The empty OpenAI key secret lives here for the same reason: the key must be set before the worker first starts in fallback mode |
 | Configurable variables | Environment-shaped inputs are variables, not constants: `allowed_cidrs`, task sizes and desired counts, the database instance class, log retention, `llm_provider` and `llm_model_id`, both passed to the worker as environment variables, and `enable_nat`. Changing model or provider is a variable change rather than a code change |
 | Meaningful outputs | ALB URL, ECR repository URLs, queue URLs, bucket name, RDS endpoint |
 | Safety | The provider pins `allowed_account_ids`, so an apply against the wrong AWS account fails immediately. A second guard covers the LLM fallback: `llm_provider = "openai"` with `enable_nat = false` fails the plan, because that combination deploys a worker with no route to its model. The failure happens at plan time, not at runtime |
@@ -733,13 +734,25 @@ in the repository.
 ```mermaid
 flowchart LR
     PR[Pull request] --> lint[ruff + mypy + pytest] --> febuild[frontend build] --> dbuild[docker build, no push] --> tfval[terraform fmt, validate, plan]
-    main["Manual dispatch, approved"] --> push[build and push 3 images to ECR, tag = git SHA] --> apply["terraform apply -var image_tag"] --> wait[ecs wait services-stable] --> health[describe-target-health]
+    main["Manual dispatch, dev environment"] --> push[build and push 3 images to ECR, tag = git SHA] --> apply["terraform apply -var image_tag"] --> wait[ecs wait services-stable] --> health[describe-target-health]
 ```
 
-**The deploy workflow never applies on its own.** It has no `push` trigger at all: the only
-way to start it is `workflow_dispatch`, and it targets a GitHub environment with a required
-reviewer, so even a dispatch waits for an approval. Merging to `main` runs the pull request
-checks and nothing else.
+**The deploy workflow never applies on its own.** Two independent gates stand between a
+merge and a change to AWS:
+
+1. It has no `push` trigger at all. The only way to start it is `workflow_dispatch`, a person
+   pressing a button. It takes no `ref` input: it deploys the commit it was dispatched from,
+   so it cannot be pointed at an unreviewed branch while holding the deploy role. Merging to `main` starts nothing, so merging documentation cannot apply
+   Terraform, and after a `terraform destroy` nothing recreates the stack.
+2. Every job that touches AWS runs in the `dev` GitHub environment, which is restricted to
+   the `main` branch. The deploy role's trust policy accepts only that environment's OIDC
+   subject (`repo:<owner>/<repo>:environment:dev`), so no other workflow, branch or event in
+   the repository can assume it, whatever its YAML says. A pull request can assume only the
+   read only plan role, whose trust policy accepts only the `pull_request` subject.
+
+A required reviewer on the environment would be a third gate. GitHub offers that rule for
+private repositories only on paid plans, and the API refused it here, so it is listed under
+[simplifications](#15-simplifications-and-limitations) rather than claimed.
 
 The reason is that this repository deploys into a single real AWS account with a real
 database. An automatic apply on merge is the right default for a service with separate
@@ -758,10 +771,10 @@ that was meant to be gone.
 | Requirement | Where |
 |---|---|
 | Application code validation | `ruff`, `mypy`, `pytest` on every pull request. The tests drive the graph with a fake LLM, so CI never calls a paid API and needs no network access or model credentials, whichever provider is configured |
-| Docker image builds | Built on pull requests, pushed only from `main` |
+| Docker image builds | Built on every pull request and never pushed there. Pushed only by the deploy workflow, which is the only place the deploy role can be assumed |
 | Container image publishing | ECR, immutable SHA tags, layer cache between runs |
-| Terraform formatting and validation | `fmt -check`, `validate`, then `plan` posted on the pull request |
-| Infrastructure deployment | `terraform apply`, on manual dispatch with an environment approval, never automatically on merge |
+| Terraform formatting and validation | `fmt -check`, `validate` for both stacks, then a `plan` with the read only role, posted on the pull request. The plan uses the image tag that is currently running, so it shows the infrastructure change and not a redeploy |
+| Infrastructure deployment | `terraform apply`, on manual dispatch from `main` in the `dev` environment, never automatically on merge |
 | Application deployment | The same apply with the new image tag |
 | Deployment verification | `aws ecs wait services-stable` for all three services, then `aws elbv2 describe-target-health`. **Not** an HTTP request to the load balancer: GitHub's runners are not in the IP allowlist, so a smoke test from CI would be blocked by design |
 
@@ -838,6 +851,7 @@ in the meantime.
 | Rolling deployments | Simplest correct option with the circuit breaker | Blue/green, so a bad revision never takes traffic | A bad revision serves some traffic until the circuit breaker rolls it back |
 | A small evaluation set, run manually | Time | Classification and field-level accuracy tracked per model change in CI | Prompt changes are not measured, only reviewed |
 | Reaper runs inside the worker poll loop | One fewer moving part | A scheduled task, so it runs on its own clock regardless of worker health | The sweep only happens while at least one worker is polling. A worker service that is fully down, rather than merely idle, leaves stuck rows unswept until it returns |
+| No required reviewer on the deploy environment | GitHub offers the required reviewers rule for private repositories only on paid plans, and the API refused it for this repository | A required reviewer on the environment, so a dispatch waits for a second person | A deploy needs one person with write access, not two. The remaining gates are the manual trigger, the branch restriction on the environment, and the OIDC trust policy |
 | The applications connect as the RDS master user | One credential to provision, and the assessment has a single schema | A dedicated least-privilege role per service, ideally IAM database authentication so there is no password at all | A compromised task has full rights on the database, including DDL |
 | Bedrock is assumed to be usable on the target account | Nothing in the application can detect or fix an account-level quota block | Deploy into an account whose Bedrock access is already established, and alarm on `ThrottlingException` and `AccessDeniedException` from the worker | An account with little usage history can carry a daily token quota of zero, which fails every model call while looking like an application bug. The daily quota is not self-service adjustable, so raising it needs an AWS Support case. The README makes one test call a prerequisite before deploying |
 | Destroy friendly settings in dev: `force_destroy` on the buckets, `force_delete` on the ECR repositories, `skip_final_snapshot = true` with no deletion protection on RDS, and `recovery_window_in_days = 0` on the OpenAI key secret | A reviewer has to be able to destroy and recreate this environment cleanly. Without these, a destroy stalls on a bucket with objects in it, an ECR repository with images, an RDS final snapshot prompt, and a secret that stays name reserved for 7 to 30 days and blocks the next apply | The opposite of every one of them: `force_destroy = false`, image tags retained, `skip_final_snapshot = false` with `deletion_protection = true`, and a 30 day secret recovery window. They are all driven off a single `ephemeral` variable, so production sets it to false and gets the safe values with no other change | In dev a `terraform destroy` really does delete the uploaded documents, the generated reports, the database and the pushed images, with no snapshot and no recovery window. That is the intent here, and it would be unacceptable anywhere else |

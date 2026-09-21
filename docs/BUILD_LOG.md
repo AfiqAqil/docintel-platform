@@ -908,6 +908,152 @@ than it saved.
 
 ---
 
+## Phase 10: CI/CD
+
+**Built.** Two workflows, as `ARCHITECTURE.md` section 12 lays out.
+
+| Workflow | Trigger | AWS role it can assume | What it does |
+|---|---|---|---|
+| `ci.yml` | every pull request | `docintel-ci-plan`, read only | `ruff`, `mypy` and `pytest` for the backend and the worker against a real PostgreSQL, the frontend build, three arm64 image builds with no push, and `terraform fmt`, `validate` and `plan`, with the plan posted on the pull request |
+| `deploy.yml` | `workflow_dispatch` only | `docintel-ci-deploy`, from the `dev` environment only | Publishes the three images under the git SHA, applies Terraform with that tag, waits for the services to be stable, checks each service runs the published image, and checks the target is healthy |
+
+**Verified.** The pull request that adds the workflows ran them on itself.
+
+```
+success  python (backend)     success  image (frontend)
+success  python (worker)      success  image (backend)
+success  frontend             success  image (worker)
+success  terraform
+
+Terraform plan (dev), posted on the pull request by the read only role:
+No changes. Your infrastructure matches the configuration.
+```
+
+That last line is worth more than it looks. It is CI, with a role that cannot write,
+confirming that what is deployed is exactly what the code describes.
+
+### What the first run surfaced
+
+**The OIDC subject claim carries immutable ids.** The plan job failed with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity`. A step that prints the subject
+claim (an identifier, never the token) showed why:
+
+```
+repo:AfiqAqil@152358148/docintel-platform@1378307019:pull_request
+```
+
+The trust policies were written against the older `repo:<owner>/<repo>:<context>` form, which
+matches nothing. Both roles now build the subject from the owner and repository ids. This is
+also the safer form: a repository name can be released and registered again by someone else,
+and an id cannot. The debugging step stays in the workflow, because the next person to see
+"not authorized" should get a string comparison and not a guess.
+
+**Local bootstrap state is a hazard with worktrees.** Planning that fix from a fresh worktree
+proposed creating all 17 bootstrap resources again, because the state file lived only in the
+worktree that first applied it. It was not applied. The state was copied across, the plan
+became two in place updates, and the stale copy was renamed so it cannot be applied by
+mistake. The file holds no secret values.
+
+**So the bootstrap state was moved into the bucket it creates.** `ARCHITECTURE.md` said
+"local state, run once", and that turned out to be a liability rather than a simplification:
+the file was gitignored, lived in one worktree, and worktrees are deleted after a merge.
+Losing it would have broken nothing in AWS and would have made the CI roles, the registries
+and the final teardown unmanageable without importing 17 resources by hand. It is now
+`bootstrap/terraform.tfstate` in the versioned, encrypted state bucket.
+
+```
+$ terraform init -migrate-state -force-copy -backend-config=backend.hcl
+  Successfully configured the backend "s3"!
+$ aws s3api head-object ... bootstrap/terraform.tfstate   -> 32382 bytes, AES256, versioned
+$ terraform state list | wc -l                            -> 17, read from S3
+$ terraform plan -detailed-exitcode                       -> exit 0, no changes
+```
+
+The circularity is real and happens exactly once. The first apply in a new account has to run
+on local state, because the bucket does not exist yet, and a full teardown has to move the
+state back out first, because the bucket cannot hold the state of its own destruction. Both
+procedures are written at the top of `infra/bootstrap/backend.tf`, where someone will be
+looking when they need them.
+
+### An external review found two real defects, and one of them had already bitten
+
+**1. A failing test run could go green, and it had.** With no `shell` named, GitHub runs a
+step as `bash -e {0}`, where a pipeline's exit status is that of its last command. The step
+was `pytest | tee pytest.out`, so it succeeded whenever `tee` did. Checking the run this log
+had just recorded as green showed the worker job's real result:
+
+```
+84 passed, 16 errors
+```
+
+So the "success python (worker)" line in the verification block above was false, and it is
+left there on purpose, next to this correction. Both workflows now set
+`defaults.run.shell: bash`, which GitHub expands to `bash -eo pipefail`. The same flaw sat in
+two places the review did not name, `terraform plan | tee` and the target health check, and
+they are covered by the same line. Reproduced locally before fixing:
+
+```
+$ bash -e -c 'false | tee /dev/null; echo continued'            -> continued, exit 0
+$ bash -eo pipefail -c 'false | tee /dev/null; echo continued'  -> exit 1
+```
+
+**The 16 errors were a real test isolation bug.** Only `test_claim_sql.py` ran the backend's
+migration, through a fixture local to that module. `test_ack_rules.py` assumed the table
+already existed. Locally it always did, because the backend's tests had run against the same
+database first. In CI each service gets its own empty database, and the ack rule tests, the
+ones covering what the consumer deletes and what it leaves, never ran. Reproduced on a brand
+new database (84 passed, 16 errors), then fixed by moving the migration into one session
+fixture in `conftest.py` that both modules' `conn` fixtures depend on. On a new database:
+100 passed, and `test_ack_rules.py` alone passes too.
+
+**2. The deploy could run unreviewed code under an administrator role.** The workflow took a
+free form `ref` input and both privileged jobs checked it out. The `dev` environment admits
+only runs dispatched from `main`, but that governs which workflow file runs, not which commit
+it checks out. Anyone able to press the button could have deployed any reachable branch, its
+Dockerfiles and its Terraform, under `AdministratorAccess`, which made the main only
+restriction decorative. The input is removed. A run deploys the commit it was dispatched
+from, a guard step refuses any ref but `refs/heads/main`, and a rollback is a revert on
+`main`, reviewed like any other change.
+
+### Decisions worth defending
+
+**The deploy workflow has no `push` trigger.** Merging to `main` starts nothing. This
+repository deploys into one real AWS account, and an apply on merge would let a documentation
+commit change running infrastructure, and would rebuild the stack after a deliberate destroy.
+
+**The control on the deploy role is its trust policy, not the workflow file.** It accepts only
+the `dev` environment's subject, and the environment is restricted to `main`. A workflow on
+another branch, or a pull request from a fork, cannot mint that subject whatever its YAML says.
+
+**A required reviewer was attempted and refused.** GitHub offers that rule for private
+repositories only on paid plans, and the API returned 422. It is listed as a simplification in
+`ARCHITECTURE.md` section 15 rather than claimed.
+
+**A skipped test fails the build.** The worker's database suite skips itself when the
+backend's virtualenv is missing, since it creates its schema with the backend's Alembic
+migration. In CI a silent skip would be a green build that never ran the claim and reaper
+tests, so the job greps for skips and fails.
+
+**The target health check compares the whole field.** The first version tested whether the
+line ended in `healthy`, and `unhealthy` does. Caught before the first run, and both cases
+were tested.
+
+**The pull request plan uses the running image tag.** It reads the tag from the live task
+definition, so the plan shows the infrastructure change in the pull request and not a
+redeploy of the application.
+
+**arm64 runners, natively.** `ubuntu-24.04-arm` for every job. The images and the Fargate
+tasks are arm64, so nothing is built under emulation, and a wheel that builds in CI is the
+wheel that ships.
+
+**The allowlist is a repository variable, not a secret and not a committed file.** It is not
+a credential, it is machine specific, and CI needs it to plan.
+
+**Delegated.** Nothing. The plan kept the deploy workflow and the OIDC trust policy off the
+delegation list, and the pull request workflow was small enough to write alongside them.
+
+---
+
 ## The Bedrock quota block: what is known, and what was decided
 
 Recorded here because it decides how the platform is deployed, and because the facts are

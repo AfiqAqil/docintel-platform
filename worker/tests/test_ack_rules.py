@@ -28,7 +28,7 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def conn():
+def conn(database_schema: None):
     connection = psycopg.connect(DSN)
     with connection.cursor() as cur:
         cur.execute("TRUNCATE documents")

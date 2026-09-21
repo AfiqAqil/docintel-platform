@@ -100,7 +100,11 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 locals {
-  github_sub_prefix = "repo:${var.github_repository}"
+  github_owner = split("/", var.github_repository)[0]
+  github_repo  = split("/", var.github_repository)[1]
+
+  # repo:<owner>@<owner id>/<repo>@<repo id>, the form the token actually carries.
+  github_sub_prefix = "repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repository_id}"
 }
 
 # Read only, assumable from a pull request. It can plan, and it cannot change anything.
@@ -148,9 +152,11 @@ resource "aws_iam_role_policy" "ci_plan_state_lock" {
   policy = data.aws_iam_policy_document.ci_plan_state_lock.json
 }
 
-# The deploy role is assumable only by a job running in the gated GitHub environment. That
-# environment has a required reviewer, so the subject claim below can only be minted after a
-# human has approved the run. A push to main on its own cannot assume this role.
+# The deploy role is assumable only by a job running in the `dev` GitHub environment, which is
+# restricted to the main branch. The only workflow that targets that environment is started
+# by hand (workflow_dispatch), so a push to main on its own cannot assume this role, and
+# neither can a pull request. A required reviewer on the environment would add a second
+# person; GitHub offers that for private repositories only on paid plans.
 data "aws_iam_policy_document" "ci_deploy_trust" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -178,8 +184,8 @@ resource "aws_iam_role" "ci_deploy" {
 
 # ponytail: AdministratorAccess. Terraform for this stack creates IAM roles, a VPC, RDS, ECS
 # and more, and a hand-built least-privilege policy for all of that is its own project. The
-# control here is who can assume the role (the reviewer-gated environment), not what it can
-# do. Production: a permissions boundary plus a policy scoped to the project's resource
+# control here is who can assume the role (one environment, one branch, a manual trigger),
+# not what it can do. Production: a permissions boundary plus a policy scoped to the project's resource
 # prefix and tags.
 resource "aws_iam_role_policy_attachment" "ci_deploy_admin" {
   role       = aws_iam_role.ci_deploy.name

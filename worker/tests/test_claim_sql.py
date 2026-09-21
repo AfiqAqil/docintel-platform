@@ -12,11 +12,9 @@ runs against the real table definition rather than a copy that can drift from it
 from __future__ import annotations
 
 import os
-import subprocess
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import psycopg
 import pytest
@@ -39,33 +37,8 @@ DSN = os.environ.get(
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(scope="session", autouse=True)
-def schema() -> None:
-    """Create the schema with the backend's migration, never with a copy of the DDL.
-
-    If this ever fails to find alembic, the tests must fail rather than quietly fall back to
-    creating the table here: a second definition of the schema is exactly what this is
-    designed to prevent.
-    """
-    backend = Path(__file__).resolve().parents[2] / "backend"
-    alembic = backend / ".venv" / "bin" / "alembic"
-    if not alembic.exists():
-        pytest.skip(f"backend virtualenv not built at {alembic}")
-
-    subprocess.run(
-        [str(alembic), "upgrade", "head"],
-        cwd=backend,
-        check=True,
-        capture_output=True,
-        env={
-            **os.environ,
-            "DATABASE_URL": DSN.replace("postgresql://", "postgresql+psycopg://"),
-        },
-    )
-
-
 @pytest.fixture
-def conn():
+def conn(database_schema: None):
     connection = psycopg.connect(DSN)
     with connection.cursor() as cur:
         cur.execute("TRUNCATE documents")

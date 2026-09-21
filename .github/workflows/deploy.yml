@@ -1,0 +1,153 @@
+# Build, publish and deploy. This workflow NEVER runs on its own.
+#
+# Two independent gates stand between a merge and a change to AWS:
+#   1. The only trigger is workflow_dispatch, with no ref input, so it deploys main and
+#      nothing else. A push to main starts nothing, so merging docs
+#      cannot apply Terraform, and after a `terraform destroy` nothing recreates the stack.
+#   2. Every job that touches AWS runs in the `dev` GitHub environment. The deploy role's
+#      trust policy accepts only that environment's OIDC subject, so no other workflow, branch
+#      or event in this repository can assume it, whatever its YAML says.
+name: deploy
+
+# There is deliberately no `ref` input. The jobs below hold an administrator role, and they
+# check out and run whatever commit they are given: its Dockerfiles, its Terraform. A free
+# form ref would let anyone who can press the button run an unreviewed branch under that
+# role, which makes the environment's main-only restriction decorative. The run deploys the
+# commit it was dispatched from, and the environment only admits runs dispatched from main.
+# Rolling back is a revert on main, which is reviewed like any other change.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# One deploy at a time. A second run waits instead of racing the first for the state lock.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+# Named explicitly, because it changes behaviour. With no `shell`, GitHub runs steps as
+# `bash -e {0}`, where a pipeline's status is the status of its LAST command: `pytest | tee`
+# succeeds whenever tee does, and a failing test run goes green. Naming bash makes GitHub use
+# `bash --noprofile --norc -eo pipefail {0}`, so a failure anywhere in a pipe fails the step.
+# Here that protects the target health check, which pipes into tee.
+defaults:
+  run:
+    shell: bash
+
+env:
+  AWS_REGION: ap-southeast-1
+  TF_IN_AUTOMATION: "true"
+  CLUSTER: docintel-dev
+
+jobs:
+  publish:
+    name: build and publish images
+    runs-on: ubuntu-24.04-arm
+    environment: dev
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      # No `ref`: this checks out the commit the run was dispatched from, which the
+      # environment guarantees is on main.
+      - uses: actions/checkout@v4
+
+      # Belt and braces. The environment already refuses any other branch, but this job is
+      # about to hold an administrator role, so it says so itself as well.
+      - name: Refuse anything that is not main
+        run: |
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::deploys run from main only, not $GITHUB_REF"; exit 1; }
+
+      # The tag is the commit. ECR tags are immutable, so a tag can never point at different
+      # bytes, and "what is running" always maps to exactly one commit.
+      - id: tag
+        run: echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_CI_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push the three images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          for service in frontend backend worker; do
+            repo="docintel/$service"
+            # Re-running a deploy of the same commit must not fail on the immutable tag.
+            if aws ecr describe-images --repository-name "$repo" --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+              echo "$repo:$TAG is already published"
+              continue
+            fi
+            # provenance=false keeps one manifest per tag, so the lifecycle policy's image
+            # count means what it says.
+            docker buildx build --platform linux/arm64 --provenance=false \
+              --cache-from "type=gha,scope=$service" --cache-to "type=gha,scope=$service,mode=max" \
+              --tag "$REGISTRY/$repo:$TAG" --push "$service"
+          done
+
+  deploy:
+    name: terraform apply and verify
+    needs: publish
+    runs-on: ubuntu-24.04-arm
+    environment: dev
+    steps:
+      # The same commit the publish job built, because both jobs belong to one run.
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.3"
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_CI_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: init
+        run: terraform -chdir=infra init -input=false -backend-config=envs/dev.backend.hcl
+
+      # Infrastructure and application go out through the same apply. Deploying the
+      # application is a change to one variable, and the running image is visible in state.
+      - name: apply
+        env:
+          TF_VAR_allowed_cidrs: ${{ vars.ALLOWED_CIDRS }}
+        run: |
+          terraform -chdir=infra apply -input=false -auto-approve -lock-timeout=120s \
+            -var-file=envs/dev.tfvars \
+            -var="image_tag=${{ needs.publish.outputs.tag }}"
+
+      # Not an HTTP request to the load balancer: the runner is not in the IP allowlist, so a
+      # smoke test from here is blocked by design. These two checks ask AWS instead.
+      - name: Wait for the three services to be stable
+        run: aws ecs wait services-stable --cluster "$CLUSTER" --services frontend backend worker
+
+      - name: Every service runs the image that was just published
+        env:
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: |
+          for service in frontend backend worker; do
+            taskdef=$(aws ecs describe-services --cluster "$CLUSTER" --services "$service" \
+              --query 'services[0].deployments[?status==`PRIMARY`]|[0].taskDefinition' --output text)
+            image=$(aws ecs describe-task-definition --task-definition "$taskdef" \
+              --query 'taskDefinition.containerDefinitions[0].image' --output text)
+            echo "$service -> $image"
+            [ "${image##*:}" = "$TAG" ] || { echo "::error::$service is not running $TAG"; exit 1; }
+          done
+
+      - name: The load balancer target is healthy
+        run: |
+          arn=$(terraform -chdir=infra output -raw frontend_target_group_arn)
+          aws elbv2 describe-target-health --target-group-arn "$arn" \
+            --query 'TargetHealthDescriptions[].[Target.Id,TargetHealth.State]' --output text | tee health.txt
+          # At least one target, and every one of them exactly "healthy". The comparison is on
+          # the whole field, because "unhealthy" also ends in "healthy".
+          [ -s health.txt ] && [ -z "$(awk '$2 != "healthy"' health.txt)" ]

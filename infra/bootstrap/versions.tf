@@ -8,9 +8,8 @@ terraform {
     }
   }
 
-  # Local state, on purpose. This stack creates the bucket that holds every other stack's
-  # state, so it cannot keep its own state there. It is applied once, by hand, and the
-  # resulting terraform.tfstate stays on the machine that ran it (it is gitignored).
+  # The backend is declared in backend.tf, which also explains the one time this stack has
+  # to run on local state: the first apply, before the bucket it creates exists.
 }
 
 provider "aws" {
