@@ -908,6 +908,91 @@ than it saved.
 
 ---
 
+## Phase 10: CI/CD
+
+**Built.** Two workflows, as `ARCHITECTURE.md` section 12 lays out.
+
+| Workflow | Trigger | AWS role it can assume | What it does |
+|---|---|---|---|
+| `ci.yml` | every pull request | `docintel-ci-plan`, read only | `ruff`, `mypy` and `pytest` for the backend and the worker against a real PostgreSQL, the frontend build, three arm64 image builds with no push, and `terraform fmt`, `validate` and `plan`, with the plan posted on the pull request |
+| `deploy.yml` | `workflow_dispatch` only | `docintel-ci-deploy`, from the `dev` environment only | Publishes the three images under the git SHA, applies Terraform with that tag, waits for the services to be stable, checks each service runs the published image, and checks the target is healthy |
+
+**Verified.** The pull request that adds the workflows ran them on itself.
+
+```
+success  python (backend)     success  image (frontend)
+success  python (worker)      success  image (backend)
+success  frontend             success  image (worker)
+success  terraform
+
+Terraform plan (dev), posted on the pull request by the read only role:
+No changes. Your infrastructure matches the configuration.
+```
+
+That last line is worth more than it looks. It is CI, with a role that cannot write,
+confirming that what is deployed is exactly what the code describes.
+
+### What the first run surfaced
+
+**The OIDC subject claim carries immutable ids.** The plan job failed with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity`. A step that prints the subject
+claim (an identifier, never the token) showed why:
+
+```
+repo:AfiqAqil@152358148/docintel-platform@1378307019:pull_request
+```
+
+The trust policies were written against the older `repo:<owner>/<repo>:<context>` form, which
+matches nothing. Both roles now build the subject from the owner and repository ids. This is
+also the safer form: a repository name can be released and registered again by someone else,
+and an id cannot. The debugging step stays in the workflow, because the next person to see
+"not authorized" should get a string comparison and not a guess.
+
+**Local bootstrap state is a hazard with worktrees.** Planning that fix from a fresh worktree
+proposed creating all 17 bootstrap resources again, because the state file lived only in the
+worktree that first applied it. It was not applied. The state was copied across, the plan
+became two in place updates, and the stale copy was renamed so it cannot be applied by
+mistake. The file holds no secret values.
+
+### Decisions worth defending
+
+**The deploy workflow has no `push` trigger.** Merging to `main` starts nothing. This
+repository deploys into one real AWS account, and an apply on merge would let a documentation
+commit change running infrastructure, and would rebuild the stack after a deliberate destroy.
+
+**The control on the deploy role is its trust policy, not the workflow file.** It accepts only
+the `dev` environment's subject, and the environment is restricted to `main`. A workflow on
+another branch, or a pull request from a fork, cannot mint that subject whatever its YAML says.
+
+**A required reviewer was attempted and refused.** GitHub offers that rule for private
+repositories only on paid plans, and the API returned 422. It is listed as a simplification in
+`ARCHITECTURE.md` section 15 rather than claimed.
+
+**A skipped test fails the build.** The worker's database suite skips itself when the
+backend's virtualenv is missing, since it creates its schema with the backend's Alembic
+migration. In CI a silent skip would be a green build that never ran the claim and reaper
+tests, so the job greps for skips and fails.
+
+**The target health check compares the whole field.** The first version tested whether the
+line ended in `healthy`, and `unhealthy` does. Caught before the first run, and both cases
+were tested.
+
+**The pull request plan uses the running image tag.** It reads the tag from the live task
+definition, so the plan shows the infrastructure change in the pull request and not a
+redeploy of the application.
+
+**arm64 runners, natively.** `ubuntu-24.04-arm` for every job. The images and the Fargate
+tasks are arm64, so nothing is built under emulation, and a wheel that builds in CI is the
+wheel that ships.
+
+**The allowlist is a repository variable, not a secret and not a committed file.** It is not
+a credential, it is machine specific, and CI needs it to plan.
+
+**Delegated.** Nothing. The plan kept the deploy workflow and the OIDC trust policy off the
+delegation list, and the pull request workflow was small enough to write alongside them.
+
+---
+
 ## The Bedrock quota block: what is known, and what was decided
 
 Recorded here because it decides how the platform is deployed, and because the facts are
