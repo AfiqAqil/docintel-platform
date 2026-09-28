@@ -198,6 +198,11 @@ people tell two policy numbers apart, and on a name or an email address it is us
 that and leaks part of the value. The condition is a property of the value rather than of the
 field name, so it cannot drift out of step with the schema.
 
+Later corrected: a value based rule has its own leak. An address like `12 Main Street`
+contains a digit, so it kept its last four characters. The tail is now opt in on the schema,
+`{"pii": "tail"}`, and only `identity_number` and `claimant_phone` carry it. Every other
+tagged field is masked in full. See the `mask_value` docstring in `worker/rules/mask.py`.
+
 **Line items stay a list of rows.** The arithmetic rule needs the rows intact to sum them, and
 each cell carries its own evidence snippet, so a fabricated citation inside a row is caught
 the same way one at the top level is.
@@ -811,7 +816,7 @@ images:   worker and backend build from uv.lock, import their code, alembic pres
 
 | Stack | State | Contents |
 |---|---|---|
-| `infra/bootstrap/` | Local, applied once by hand | State bucket, three ECR repositories, the empty OpenAI key secret, the GitHub OIDC provider, a read only plan role, and a deploy role assumable only from the reviewer gated GitHub environment |
+| `infra/bootstrap/` | Local, applied once by hand | State bucket, three ECR repositories, the empty OpenAI key secret, the GitHub OIDC provider, a read only plan role, and a deploy role assumable only from the `dev` GitHub environment, which admits only `main` |
 | `infra/` | S3 backend with native locking | VPC with public, app and worker tiers, five interface endpoints plus the S3 gateway endpoint, a NAT gateway on the worker route table only, six security groups, S3 with the `uploads/` event filter, SQS with a DLQ and an alarm, RDS, IAM, the load balancer, and one reusable `ecs_service` module used three times |
 
 **Applied.** Bootstrap: 17 resources. Main stack: 91 resources in about six minutes, then one
@@ -893,9 +898,13 @@ secret by name through data sources, so bootstrap can stay on local state and no
 another stack's state file.
 
 **The CI deploy role is AdministratorAccess, and the control is who can assume it.** Its trust
-policy accepts only the subject claim of the reviewer gated GitHub environment, so a push to
-main cannot assume it. A least privilege policy for a stack that creates IAM roles, a VPC, RDS
-and ECS is its own project, and is named as the production approach in the code.
+policy accepts only the subject claim of the `dev` GitHub environment, and that environment
+admits only runs from `main`. A least privilege policy for a stack that creates IAM roles, a
+VPC, RDS and ECS is its own project, and is named as the production approach in the code.
+
+Later corrected: this entry and the bootstrap table above first called the environment
+reviewer gated. The required reviewer rule was refused (see phase 10), so the gates are the
+manual dispatch, the environment's `main` restriction and the OIDC trust policy.
 
 **Cost.** About 6 USD a day while it runs, of which the NAT gateway is 1.55 and exists only
 because Bedrock is blocked. The environment is meant to be applied, verified and destroyed,

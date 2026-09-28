@@ -263,12 +263,18 @@ must never contain them. `mask_pii` therefore runs once, after the last validati
 the summary prompt is built from the masked state.
 
 **What `mask_pii` masks.** Each per-type Pydantic schema tags sensitive fields with
-`pii=True`: identity numbers, dates of birth, full addresses, bank and card numbers, contact
-details. The node masks the value of every field tagged that way, plus the evidence snippet
-attached to any such field, plus any occurrence of those values in the `trace`. Masking keeps
-a recognisable shape, for example `••••••-••-4321`, so a reviewer can still tell one document
-from another. Raw `text`, `page_images` and unmasked field values are never written to logs or
-persisted in the report.
+`json_schema_extra={"pii": True}`: personal names, full addresses, the incident location,
+email addresses and dates of birth. Every tagged value is masked in full. Identity numbers and
+phone numbers are tagged `{"pii": "tail"}` instead, and keep their last four characters
+visible, for example `••••••-••-4321`, so a reviewer can still tell one document from another.
+The tail is opt in, so a newly tagged field is fully masked unless the schema says otherwise.
+
+Every tagged value is then scrubbed wherever else it appears: in the value and evidence
+snippet of every field, tagged or not, in the cells of invoice line items, in the validation
+errors, and in the `trace`. A tagged field whose value was rejected has its snippet dropped,
+since there is no value left to search for. The classifier's rationale is scrubbed the same
+way, and dropped when nothing sensitive was extracted. Raw `text`, `page_images` and unmasked
+field values are never written to logs or persisted in the report.
 
 Masking finds a value the same way snippet verification finds a snippet: any run of whitespace
 matches any run of whitespace, and case is ignored. The two have to agree. When masking used
@@ -872,7 +878,7 @@ in the meantime.
 | No required reviewer on the deploy environment | GitHub offers the required reviewers rule for private repositories only on paid plans, and the API refused it for this repository | A required reviewer on the environment, so a dispatch waits for a second person | A deploy needs one person with write access, not two. The remaining gates are the manual trigger, the branch restriction on the environment, and the OIDC trust policy |
 | The applications connect as the RDS master user | One credential to provision, and the assessment has a single schema | A dedicated least-privilege role per service, ideally IAM database authentication so there is no password at all | A compromised task has full rights on the database, including DDL |
 | Bedrock is assumed to be usable on the target account | Nothing in the application can detect or fix an account-level quota block | Deploy into an account whose Bedrock access is already established, and alarm on `ThrottlingException` and `AccessDeniedException` from the worker | An account with little usage history can carry a daily token quota of zero, which fails every model call while looking like an application bug. The daily quota is not self-service adjustable, so raising it needs an AWS Support case. The README makes one test call a prerequisite before deploying |
-| Destroy friendly settings in dev: `force_destroy` on the buckets, `force_delete` on the ECR repositories, `skip_final_snapshot = true` with no deletion protection on RDS, and `recovery_window_in_days = 0` on the OpenAI key secret | A reviewer has to be able to destroy and recreate this environment cleanly. Without these, a destroy stalls on a bucket with objects in it, an ECR repository with images, an RDS final snapshot prompt, and a secret that stays name reserved for 7 to 30 days and blocks the next apply | The opposite of every one of them: `force_destroy = false`, image tags retained, `skip_final_snapshot = false` with `deletion_protection = true`, and a 30 day secret recovery window. They are all driven off a single `ephemeral` variable, so production sets it to false and gets the safe values with no other change | In dev a `terraform destroy` really does delete the uploaded documents, the generated reports, the database and the pushed images, with no snapshot and no recovery window. That is the intent here, and it would be unacceptable anywhere else |
+| Destroy friendly settings in dev: `force_destroy` on the buckets, `force_delete` on the ECR repositories, `skip_final_snapshot = true` with no deletion protection on RDS, and `recovery_window_in_days = 0` on the OpenAI key secret | A reviewer has to be able to destroy and recreate this environment cleanly. Without these, a destroy stalls on a bucket with objects in it, an ECR repository with images, an RDS final snapshot prompt, and a secret that stays name reserved for 7 to 30 days and blocks the next apply | The opposite of every one of them: `force_destroy = false`, image tags retained, `skip_final_snapshot = false` with `deletion_protection = true`, and a 30 day secret recovery window. They are all driven off a `destroyable` variable, one in each stack, so production sets it to false in both and gets the safe values with no other change | In dev a `terraform destroy` really does delete the uploaded documents, the generated reports, the database and the pushed images, with no snapshot and no recovery window. That is the intent here, and it would be unacceptable anywhere else |
 | The deployed demo may run on OpenAI over a NAT gateway rather than on Bedrock | The account's Bedrock token quota is 0 in every region tested, the daily quota is not self-service adjustable, and AWS Support case 178990624000702 (opened 2026-09-20) is open. On 2026-09-21 AWS Support confirmed by live chat that the case is escalated to the Bedrock service team, whose usual response time is 24 to 48 hours. Waiting on it would leave the platform with no working model path | Bedrock through the VPC endpoint: IAM authentication, no stored credential, no internet egress, and documents that never leave AWS | In this mode the worker has outbound 443 to the internet, an API key sits in Secrets Manager, and documents are processed by a third party. It is acceptable only because every document in this repository is synthetic |
 
 ---
